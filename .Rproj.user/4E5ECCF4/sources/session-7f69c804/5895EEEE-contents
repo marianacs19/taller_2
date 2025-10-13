@@ -1,0 +1,138 @@
+### Clasificación
+rm(list = ls())
+
+library(pacman)
+
+p_load(rio,           # import/export data
+       tidyverse,     # tidy-data
+       glmnet,        # To implement regularization algorithms. 
+       caret,         # Creating predictive models
+       scatterplot3d, # For 3D visualization
+       plotly         # For interactive 3D plots
+)
+
+# Bases de datos:
+credit <- readRDS(url("https://github.com/ignaciomsarmiento/datasets/blob/main/credit_class.rds?raw=true"))
+
+table(credit$purpose)
+
+credit <- droplevels(credit) #drop unused levels
+
+
+# Estamos creando nuevas variables necesarias para analizar. Especialmenente para el análisis
+credit <- credit %>% 
+  mutate(Default = factor(Default,
+                          levels = c(0,1), # 0 is the reference category
+                          labels = c("No","Yes")),
+         installment = factor(installment, 
+                              levels = 1:4, 
+                              labels = c('>35%', '>25% but <35%', 
+                                         '>20% but <25%', '<20%')))
+
+# Los procesos de clasificación tiene dos fases; la estimación de las probabilidades y luego la clasificación
+# de las observaciones basadas en la probabilidad. Esa decisión de clasificación no es siempre del 50%, depende de 
+# de las Loss Given Default; que tiene en cuenta el valos esperado de mis beneficios
+
+# Estimación de la probabilidad de Logit ======================
+
+#Estimaremis la función con Logit; que se estima con la función likelihood function:
+
+# Def: odd ratio; qué tan probable es que suceda un evento dado otro; la división. X veces más probable que pase
+# el denominador que el numerador
+
+# Estimación
+
+mylogit <- glm(formula = Default ~., data=credit,
+               family = 'binomial') #diferentes categorías son diferentes familias
+
+summary(mylogit) # Cómo es que se hace para interpretar como betas? Tarea
+
+#Probabilidad estimada
+credit <- credit %>% 
+  mutate(prob_hat = predict(mylogit, newdata = credit, 
+                            type ='response'),
+         type = 'link')
+
+# Revisamos como nos va
+
+head(credit %>% select(Default, prob_hat))
+
+# La clasficación de Bayes asume que el costo es simétrico
+
+#Asigmanos la regla (parte 2) ==============
+
+rule <- 0.5
+
+credit <- credit %>% 
+  mutate(Default_hat = ifelse(test=prob_hat >= rule, yes ='Yes', no='No'))
+
+#Matriz de confusión
+table(credit$Default, credit$Default_hat) # Comparamos para encontrar verdaderos, falsos positivos, falsos negativos
+
+# Accuracy: los valores de la diaggonal dividos los totales
+(638+90) / 1000 # Rec para comparar modelos sirve la accuracy
+#Precision:
+
+# Estimación por fuera de muestra ============
+
+
+
+
+# Paso 1: asegurar que la variable objetivo sea un factor binario
+credit$Default <- factor(credit$Default, levels = c("No", "Yes"))
+
+# Paso 2: definir el control de entrenamiento
+ctrl <- trainControl(method = "cv",
+                     number = 10,
+                     classProbs = TRUE,  # nota: minúscula 'c'
+                     savePredictions = "final",
+                     verboseIter = TRUE)  # nota: el argumento correcto es 'verboseIter'
+
+# Paso 3: entrenar el modelo
+default_logit <- train(Default ~ .,
+                       data = credit[, -c(10:12)],
+                       method = "glm",
+                       family = "binomial",
+                       trControl = ctrl)
+
+
+print(paste("Mean accuracy:", mean(default_logit$resample$Accuracy)))
+
+# Since we're predicting with an object created by `caret`, some arguments changed.
+# In particular, to predict class probabilities we use `type = 'prob'`, and to
+# predict class labels we use `type = 'raw'`. 
+predict_logit <- data.frame(
+  Default = credit$Default,                                           ## observed class labels
+  P_hat = predict(default_logit, newdata = credit, type = "prob"),    ## predicted class probabilities
+  pred = predict(default_logit, newdata = credit, type = "raw")      ## predicted class labels
+)
+
+head(predict_logit)
+
+# No sé que me dice esta vaina
+ggplot(predict_logit, aes(x = P_hat.Yes, fill = Default)) +
+  geom_density(alpha = 0.5) + 
+  labs(title = "Probability by Default Status",
+       x = "Value",
+       y = "Density") +
+  scale_fill_manual(values = c("blue", "red"),           # colors for default equal to 0 and 1
+                    labels = c("Default = 0", "Default = 1")) + 
+  theme_minimal()
+
+
+# Estimación por KNN ====================
+
+default_knn <- train(
+  Default ~., data = credit[, -c(10:12)],
+  method = 'knn', tuneGrid = expand.grid(k =seq(from = 15, to =39, by =3)), # search over the grid
+  trControl = ctrl)
+# Cómo se lee?
+default_knn
+
+# Discriminación Lineal =================
+
+# Nos basamos en Bayes. Nos interesa la información que tenemos antes (wut), la prior nos da alguna info
+# Después viene la información de los daots
+
+# Probabilidad de A|B = Pr[B|A]*PR[A] / PR[B]
+  # WTF IS GOING THE FUCK ON ? HELLO
