@@ -183,7 +183,7 @@ table(htrain_rawf$Pobre)
 
 #Segundo modelo ====================
 mylogit2 <- glm(
-  formula = Pobre ~ . - id - Espacios_hogar - Li_hogar,
+  formula = Pobre ~ Espacios_hogar + Li_hogar + Propiedad_vivienda_hogar + Asalariados_hogar + Adult_no_educ_hogar + Menores_cinco_hogar,
   data = htrain_rawf,
   family = "binomial"
 )
@@ -253,3 +253,56 @@ test_raw$Oficio_C8                   <- as.factor(test_raw$Oficio_C8)
 test_raw$Oficio_nombre               <- as.factor(test_raw$Oficio_nombre)
 test_raw$Oficio_skill                <- as.factor(test_raw$Oficio_skill)
 test_raw$Ingreso_binario_hogar       <- as.factor(test_raw$Ingreso_binario_hogar)
+
+#Renombramos variables:
+
+test_raw  <- test_raw %>% rename(
+  Propiedad_vivienda_hogar = Propiedad_vivienda,
+  Li_hogar = Li,
+  Lp_hogar = Lp
+)
+
+#Filtramos la base de datos:
+
+library(dplyr)
+
+test_rawf  <- test_raw %>%
+  select(matches("_hogar$"), id, Dominio, Urbano)
+
+htest_rawf <- test_rawf %>%
+  group_by(id) %>%
+  summarise(across(everything(), first), .groups = "drop")
+
+
+# 1️⃣ Fit the model
+mylogit2 <- glm(
+  formula = Pobre ~ Espacios_hogar + Li_hogar + Propiedad_vivienda_hogar +
+    Asalariados_hogar + Adult_no_educ_hogar + Menores_cinco_hogar,
+  data = htrain_rawf,
+  family = "binomial"
+)
+
+# 2️⃣ Get predicted probabilities for the "1" (positive) class
+probs <- predict(mylogit2, newdata = htest_rawf, type = "response")
+
+# 3️⃣ Apply your custom cutoff
+cutoff <- 0.4
+pred_class <- ifelse(probs >= cutoff, 1, 0)
+
+# 4️⃣ Convert to factor (optional, for metrics)
+pred_class <- factor(pred_class, levels = c(0, 1))
+
+# Para exportar:
+
+results <- htest_rawf %>%
+  select(id) %>%
+  mutate(
+    prob_pobre = probs,
+    pobre = pred_class
+  )
+
+results <- results %>% 
+  select(-prob_pobre)
+
+write_csv(results, "logit_cutoff40_v1.csv", col_names = TRUE)
+
