@@ -27,7 +27,7 @@ p_load(
 # CONFIG --------------------------------------------------
 # =========================================================
 # Carpeta donde están los .csv (separados por ;)
-setwd("C:/Users/marce/Documents/Andes/Taller 2 - BD and ML")
+setwd("C:/Users/Usuario/Documents/Andes/Primer Semestre/Machine Learning/TALLER 2 GIT/taller_2")
 data_dir <- "Data/Raw"     # <-- cámbialo
 pattern  <- "\\.csv$"      # filtra solo .csv
 
@@ -256,7 +256,7 @@ train_def <- apply_labels_from_dict(train, dict_df)
 test_def <- apply_labels_from_dict(test, dict_df)
 
 # Modelo 1
-
+# 
 ctrl <- trainControl(
   method = "cv",
   number = 5,
