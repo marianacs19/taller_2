@@ -27,7 +27,7 @@ p_load(
 # CONFIG --------------------------------------------------
 # =========================================================
 # Carpeta donde están los .csv (separados por ;)
-setwd("C:/Users/Usuario/Documents/Andes/Primer Semestre/Machine Learning/TALLER 2 GIT/taller_2")
+setwd("C:/Users/marce/Documents/Andes/Taller2GIT/taller_2")
 data_dir <- "Data/Raw"     # <-- cámbialo
 pattern  <- "\\.csv$"      # filtra solo .csv
 
@@ -254,6 +254,9 @@ dict_df <- tribble(
 
 train_def <- apply_labels_from_dict(train, dict_df)
 test_def <- apply_labels_from_dict(test, dict_df)
+
+save(test_def, file="Data/test_def.R")
+save(train_def, file="Data/train_def.R")
 
 # Modelo 1
 # 
