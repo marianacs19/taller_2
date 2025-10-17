@@ -293,7 +293,7 @@ ctrl <- trainControl(
 set.seed(2025)
 
 model1 <- train(
-  Pobre~Años_educ_jefe+Años_educ_mean_hogar+Edad_jefe+Horas_trabajadas_hogar+Li+Lp+Pctg_Personas_edad_productiva_hogar+Personas_hogar+Ciudad_cat+Urbano+Espacios_hogar+Subsidio_transporte_jefe+Dormitorios_hogar+Propiedad_vivienda+Personas_hogar+Oficio_C8_jefe,
+  Pobre~Urbano+Departamento+Espacios_hogar+Dormitorios_hogar+Propiedad_vivienda+Personas_hogar+Oficio_C8_jefe,
   data=train_def,
   method = "glm",
   trControl = ctrl, 
