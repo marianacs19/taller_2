@@ -247,7 +247,11 @@ dict_df <- tribble(
   "Desocupado","1","Si_Desocupado",
   "Desocupado","0","No_Desocupado",
   "Inactivo","1","Si_Inactivo",
-  "Inactivo","0","No_Inactivo"
+  "Inactivo","0","No_Inactivo",
+  "Ocupado_jefe","0","No_ocupado",
+  "Ocupado_jefe","1","Ocupado",
+  "Inactivo_jefe","0","No_inactivo",
+  "Inactivo_jefe","1","Inactivo",
 ) |> mutate(across(everything(), as.character))
 
 ##Aplicar labels
@@ -309,7 +313,153 @@ write.csv(predictSample,"Estimations/modelo1_pruebav1_15_10_2025.csv", row.names
 
 # Estadísticas descriptivas
 
+# ==== (1) Resumen compacto de TODAS las variables ====
+overall_summary_table <- function(df, exclude = NULL, digits = 3) {
+  if (!is.null(exclude)) df <- df[, setdiff(names(df), exclude), drop = FALSE]
+  
+  is_cat <- function(x) is.factor(x) || is.character(x) || is.logical(x)
+  
+  # --- Numéricas ---
+  num_vars <- dplyr::select(df, where(is.numeric))
+  if (ncol(num_vars) > 0) {
+    num_tbl <- num_vars |>
+      tidyr::pivot_longer(everything(), names_to = "variable", values_to = "value") |>
+      dplyr::summarise(
+        n     = sum(!is.na(value)),
+        media = mean(value, na.rm = TRUE),
+        sd    = sd(value, na.rm = TRUE),
+        min   = suppressWarnings(min(value, na.rm = TRUE)),
+        max   = suppressWarnings(max(value, na.rm = TRUE)),
+        .by   = "variable"
+      ) |>
+      dplyr::mutate(tipo = "numérica")
+  } else {
+    num_tbl <- tibble::tibble(
+      variable = character(), n = integer(), media = double(), sd = double(),
+      min = double(), max = double(), tipo = character()
+    )
+  }
+  
+  # --- Categóricas ---
+  cat_vars <- dplyr::select(df, where(is_cat))
+  if (ncol(cat_vars) > 0) {
+    cat_tbl <- cat_vars |>
+      dplyr::mutate(dplyr::across(everything(), as.character)) |>
+      tidyr::pivot_longer(everything(), names_to = "variable", values_to = "value") |>
+      dplyr::filter(!is.na(value)) |>
+      dplyr::count(variable, value, name = "n_value") |>
+      dplyr::group_by(variable) |>
+      dplyr::mutate(p = n_value / sum(n_value)) |>
+      dplyr::slice_max(order_by = n_value, n = 1, with_ties = FALSE) |>
+      dplyr::summarise(
+        n               = sum(n_value),
+        n_niveles       = dplyr::n_distinct(value),
+        modo            = dplyr::first(value),
+        modo_porcentaje = dplyr::first(p),
+        .groups = "drop"
+      ) |>
+      dplyr::mutate(tipo = "categórica")
+  } else {
+    cat_tbl <- tibble::tibble(
+      variable = character(), n = integer(), n_niveles = integer(),
+      modo = character(), modo_porcentaje = double(), tipo = character()
+    )
+  }
+  
+  # --- Unir y ordenar columnas ---
+  out <- dplyr::bind_rows(num_tbl, cat_tbl) |>
+    dplyr::mutate(dplyr::across(where(is.numeric), ~round(.x, digits))) |>
+    dplyr::relocate(variable, tipo)
+  
+  out
+}
 
+# ==== (2) Diferencias de medias por pobreza (Welch t-test) ====
+diff_means_by_poverty <- function(df, poverty_var, poor_level = NULL, digits = 3) {
+  stopifnot(poverty_var %in% names(df))
+  pov <- .to_poverty01(df[[poverty_var]], poor_level = poor_level)
+  df2 <- df |> mutate(`__poverty__` = pov)
+  
+  num_vars <- names(df2)[sapply(df2, is.numeric)]
+  num_vars <- setdiff(num_vars, "__poverty__")
+  
+  res <- map_dfr(num_vars, function(v) {
+    x  <- df2[[v]]
+    g1 <- x[df2$`__poverty__` == 1]
+    g0 <- x[df2$`__poverty__` == 0]
+    ok1 <- sum(!is.na(g1)) > 1
+    ok0 <- sum(!is.na(g0)) > 1
+    tt <- if (ok1 && ok0) try(t.test(g1, g0), silent = TRUE) else NA
+    
+    pval <- if (inherits(tt, "htest")) tt$p.value else NA_real_
+    sig  <- ifelse(is.na(pval), "",
+                   ifelse(pval < .001, "***",
+                          ifelse(pval < .01,  "**",
+                                 ifelse(pval < .05,  "*",
+                                        ifelse(pval < .1,   "•", "")))))
+    
+    tibble(
+      variable        = v,
+      n_pobre         = sum(!is.na(g1)),
+      media_pobre     = mean(g1, na.rm = TRUE),
+      n_no_pobre      = sum(!is.na(g0)),
+      media_no_pobre  = mean(g0, na.rm = TRUE),
+      diferencia      = mean(g1, na.rm = TRUE) - mean(g0, na.rm = TRUE),
+      p_value         = pval,
+      signif          = sig
+    )
+  }) |>
+    mutate(across(where(is.numeric), ~round(.x, digits))) |>
+    arrange(desc(abs(diferencia)))
+  res
+}
+
+# ==== (A) Funciones helper para exportar a LaTeX con kableExtra ====
+to_latex_file <- function(df, caption, label, file, digits = 3, col_names = NULL) {
+  latex <- kbl(
+    df,
+    format      = "latex",
+    booktabs    = TRUE,
+    longtable   = TRUE,
+    linesep     = "",
+    caption     = caption,
+    label       = label,
+    align       = "l",
+    escape      = TRUE # escapa _ y caracteres especiales en nombres
+  ) |>
+    kable_styling(latex_options = c("repeat_header", "hold_position"))
+  cat(latex, file = file)
+  invisible(file)
+}
+
+# ==== Utilidad: convertir variable de pobreza a 0/1 ====
+# poor_level: nombre del nivel que indica "pobre" si la variable no es 0/1.
+.to_poverty01 <- function(x, poor_level = NULL) {
+  if (is.logical(x)) return(as.integer(x))
+  if (is.numeric(x))  return(as.integer(x > 0))
+  x <- as.factor(x)
+  if (!is.null(poor_level)) return(as.integer(x == poor_level))
+  levs <- levels(x)
+  if (length(levs) != 2) stop("La variable de pobreza debe tener 2 niveles o especifica 'poor_level'.")
+  # Por convención, segundo nivel = pobre si no se especifica
+  as.integer(x == levs[2])
+}
+
+overall <- overall_summary_table(train_def, exclude = c("id"))
+diffm   <- diff_means_by_poverty(train_def, poverty_var = "Pobre", poor_level = "Pobre")
+                                 
+overall_out <- overall |>
+  rename(
+    `Variable` = variable, `Tipo` = tipo, `N` = n,
+    `Media` = media, `Desv. Est.` = sd, `Mín` = min, `Máx` = max,
+    `N niveles` = n_niveles, `Modo` = modo, `Modo (%)` = modo_porcentaje
+  )
+diffm_out <- diffm |>
+  rename(
+    `Variable` = variable, `N pobre` = n_pobre, `Media pobre` = media_pobre,
+    `N no pobre` = n_no_pobre, `Media no pobre` = media_no_pobre,
+    `Dif.` = diferencia, `p-valor` = p_value, `Sig.` = signif
+  )
 
 # =========================================================
 # Fin -----------------------------------------------------
