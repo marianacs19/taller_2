@@ -393,6 +393,197 @@ head(predictSample)
 # nombre
 write.csv(predictSample,"Estimations/modelo2_cutoff0.2062748.csv", row.names = FALSE)
 
+# Modelo 3
+# 
+ctrl <- trainControl(
+  method = "cv",
+  number = 5,
+  classProbs = TRUE,
+  savePredictions = TRUE
+)
+
+set.seed(2025)
+
+model1 <- train(
+  Pobre~Arriendo_sumado + Años_educ_jefe+Años_educ_mean_hogar+Edad_jefe+Horas_trabajadas_hogar+Li+Lp+Pctg_Personas_edad_productiva_hogar+Personas_hogar+Ciudad_cat+Urbano+Espacios_hogar+Subsidio_transporte_jefe+Dormitorios_hogar+Propiedad_vivienda+Personas_hogar+Oficio_C8_jefe,
+  data=train_def,
+  method = "glm",
+  trControl = ctrl, 
+  family = "binomial"
+)
+
+# Since we're predicting with an object created by `caret`, some arguments changed.
+# In particular, to predict class probabilities we use `type = 'prob'`, and to
+# predict class labels we use `type = 'raw'`. 
+predict_logit <- data.frame(
+  Pobre = train_def$Pobre,                                           ## observed class labels
+  P_hat = predict(model1, newdata = train_def, type = "prob"),    ## predicted class probabilities
+  pred = predict(model1, newdata = train_def, type = "raw")      ## predicted class labels
+)
+
+head(predict_logit)
+
+cm <- confusionMatrix(data = predict_logit$pred, reference = predict_logit$Pobre, positive = "Pobre")
+cm
+
+# Cutoff out
+
+p_load("pROC") # Paquete para calcular y visualizar curvas ROC
+
+roc_obj_en<-roc(response=model1$pred$obs,  # Valores reales de la variable objetivo
+                predictor=model1$pred$Pobre , # Probabilidades predichas por el modelo
+                levels = c("No_pobre", "Pobre"),  # # Establece la referencia control y caso (No_pobre = negativo, Pobre = positivo) 
+                direction = "<")  # "<" significa que "desempleado" es positivo
+
+rfThresh_en <- coords(roc_obj_en, x = "best", best.method = "closest.topleft")
+rfThresh_en
+
+###Formateo a KAGGLE
+
+predictSample <- test_def |>
+  mutate(.prob = predict(model1, newdata = test_def, type = "prob") |> as.data.frame()) |>
+  unnest_wider(.prob) |>
+  select(id, Pobre)    # esta columna viene del nombre de la clase
+
+head(predictSample)
+
+predictSample <- predictSample |> 
+  mutate(pobre=ifelse(Pobre>=rfThresh_en$threshold,1,0)) |>
+  select(id, pobre)
+head(predictSample)            
+
+# nombre
+write.csv(predictSample,"Estimations/modelo3_cutoff0.2062807.csv", row.names = FALSE)
+
+# Modelo 4
+# 
+
+multiStats <- function(...) c(twoClassSummary(...), defaultSummary(...), prSummary(...))
+
+pos_weight  <- sum(train_def$Pobre == "No_pobre") / sum(train_def$Pobre == "Pobre")
+pos_weight
+
+wts <- ifelse(train_def$Pobre == "Pobre", pos_weight, 1) 
+
+ctrl_multiStats <- trainControl(
+  method = "cv",  # Usamos validación cruzada
+  number = 5,  # 5-fold cross-validation
+  summaryFunction = multiStats,  # Usamos la función de evaluación personalizada
+  classProbs = TRUE,  # Habilita el cálculo de probabilidades para cada clase
+  verbose = FALSE,  # Evita mensajes innecesarios en la consola
+  savePredictions = TRUE  # Guarda las predicciones para análisis posterior
+)
+
+set.seed(2025)
+
+model1 <- train(
+  Pobre~Arriendo_sumado + Años_educ_jefe+Años_educ_mean_hogar+Edad_jefe+Horas_trabajadas_hogar+Li+Lp+Pctg_Personas_edad_productiva_hogar+Personas_hogar+Ciudad_cat+Urbano+Espacios_hogar+Subsidio_transporte_jefe+Dormitorios_hogar+Propiedad_vivienda+Personas_hogar+Oficio_C8_jefe,
+  data=train_def,
+  method = "glm",
+  trControl = ctrl_multiStats, 
+  family = "binomial",
+  metric="Sens",
+  weights    = wts
+)
+
+# Since we're predicting with an object created by `caret`, some arguments changed.
+# In particular, to predict class probabilities we use `type = 'prob'`, and to
+# predict class labels we use `type = 'raw'`. 
+predict_logit <- data.frame(
+  Pobre = train_def$Pobre,                                           ## observed class labels
+  P_hat = predict(model1, newdata = train_def, type = "prob"),    ## predicted class probabilities
+  pred = predict(model1, newdata = train_def, type = "raw")      ## predicted class labels
+)
+
+head(predict_logit)
+
+cm <- confusionMatrix(data = predict_logit$pred, reference = predict_logit$Pobre, positive = "Pobre")
+cm
+
+# Cutoff out
+
+p_load("pROC") # Paquete para calcular y visualizar curvas ROC
+
+roc_obj_en<-roc(response=model1$pred$obs,  # Valores reales de la variable objetivo
+                predictor=model1$pred$Pobre , # Probabilidades predichas por el modelo
+                levels = c("No_pobre", "Pobre"),  # # Establece la referencia control y caso (No_pobre = negativo, Pobre = positivo) 
+                direction = "<")  # "<" significa que "desempleado" es positivo
+
+rfThresh_en <- coords(roc_obj_en, x = "best", best.method = "closest.topleft")
+rfThresh_en
+
+###Formateo a KAGGLE
+
+predictSample <- test_def |>
+  mutate(.prob = predict(model1, newdata = test_def, type = "prob") |> as.data.frame()) |>
+  unnest_wider(.prob) |>
+  select(id, Pobre)    # esta columna viene del nombre de la clase
+
+head(predictSample)
+
+predictSample <- predictSample |> 
+  mutate(pobre=ifelse(Pobre>=rfThresh_en$threshold,1,0)) |>
+  select(id, pobre)
+head(predictSample)            
+
+# nombre
+write.csv(predictSample,"Estimations/modelo4_cutoff0.516826.csv", row.names = FALSE)
+
+# Modelo 5
+p_load('xgboost')
+
+grid_xbgoost <- expand.grid(nrounds = c(100,250),
+                            max_depth = c(2,4), 
+                            eta = c(0.01,0.05), 
+                            gamma = c(0,1), 
+                            min_child_weight = c(10, 25),
+                            colsample_bytree = c(0.33,0.66),
+                            subsample = c(0.4,0.8))
+
+Xgboost_tree <- train(Pobre ~ Arriendo_sumado + Años_educ_jefe+Años_educ_mean_hogar+Edad_jefe+Horas_trabajadas_hogar+Li+Lp+Pctg_Personas_edad_productiva_hogar+Personas_hogar+Ciudad_cat+Urbano+Espacios_hogar+Subsidio_transporte_jefe+Dormitorios_hogar+Propiedad_vivienda+Personas_hogar+Oficio_C8_jefe,
+                      data=train_def,
+                      method = "xgbTree", 
+                      trControl = ctrl_multiStats,
+                      tuneGrid=grid_xbgoost
+)
+
+###Formateo a KAGGLE
+
+predictSample <- test_def |>
+  mutate(pobre_lab = predict(Xgboost_tree, newdata = test_def, type = "raw")) |>
+  select(id,pobre_lab)
+
+head(predictSample)
+
+predictSample <- predictSample |> 
+  mutate(pobre=ifelse(pobre_lab=="Pobre",1,0)) |>
+  select(id, pobre)
+head(predictSample)            
+
+# nombre
+write.csv(predictSample,"Estimations/XBOOST_NR250_MD_4_ETA_0-05_GAM_0_CBT_066_MIN_CHI_W_10_SB04.csv", row.names = FALSE)
+
+
+roc_obj_en<-roc(response=Xgboost_tree$pred$obs[(Xgboost_tree$pred$eta==Xgboost_tree$bestTune$eta)&
+                                               (Xgboost_tree$pred$max_depth==Xgboost_tree$bestTune$max_depth)&
+                                               (Xgboost_tree$pred$gamma==Xgboost_tree$bestTune$gamma)&
+                                               (Xgboost_tree$pred$colsample_bytree==Xgboost_tree$bestTune$colsample_bytree)&
+                                               (Xgboost_tree$pred$nrounds==Xgboost_tree$bestTune$nrounds)&
+                                               (Xgboost_tree$pred$min_child_weight==Xgboost_tree$bestTune$min_child_weight)&
+                                               (Xgboost_tree$pred$subsample==Xgboost_tree$bestTune$subsample)],  # Valores reales de la variable objetivo
+                predictor=Xgboost_tree$pred$Pobre[(Xgboost_tree$pred$eta==Xgboost_tree$bestTune$eta)&
+                                                    (Xgboost_tree$pred$max_depth==Xgboost_tree$bestTune$max_depth)&
+                                                    (Xgboost_tree$pred$gamma==Xgboost_tree$bestTune$gamma)&
+                                                    (Xgboost_tree$pred$colsample_bytree==Xgboost_tree$bestTune$colsample_bytree)&
+                                                    (Xgboost_tree$pred$nrounds==Xgboost_tree$bestTune$nrounds)&
+                                                    (Xgboost_tree$pred$min_child_weight==Xgboost_tree$bestTune$min_child_weight)&
+                                                    (Xgboost_tree$pred$subsample==Xgboost_tree$bestTune$subsample)], # Probabilidades predichas por el modelo
+                levels = c("No_pobre", "Pobre"),  # # Establece la referencia control y caso (empleado = negativo, desempleado = positivo) 
+                direction = "<")  # "<" significa que "desempleado" es positivo
+
+rfThresh_en <- coords(roc_obj_en, x = "best", best.method = "closest.topleft")
+rfThresh_en
+
 # Estadísticas descriptivas
 
 # ==== (1) Resumen compacto de TODAS las variables ====

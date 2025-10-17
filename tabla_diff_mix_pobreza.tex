@@ -15,6 +15,8 @@ Variable & Tipo & Medida & N pobre & Est. pobre & N no pobre & Est. no pobre & D
 \bottomrule
 \endlastfoot
 Arriendo\_estimado\_mensual & numérica & media & 18570 & 269601.472 & 81937 & 598881.491 & -329280.019 & 0.000 & ***\\
+Arriendo\_sumado & numérica & media & 33024 & 295994.399 & 131936 & 557831.208 & -261836.809 & 0.000 & ***\\
+resultado & numérica & media & 33024 & 291567.619 & 131936 & 552935.618 & -261367.999 & 0.000 & ***\\
 Arriendo\_pagado\_mensual & numérica & media & 14454 & 319788.966 & 49999 & 477640.773 & -157851.807 & 0.000 & ***\\
 Pago\_cuota\_amortizacion\_mensual & numérica & media & 549 & 1041461.210 & 5077 & 975196.473 & 66264.737 & 0.898 & \\
 Lp & numérica & media & 33024 & 265302.517 & 131936 & 273079.150 & -7776.632 & 0.000 & ***\\
@@ -40,7 +42,6 @@ Personas\_con\_Recibio\_prima\_servicios\_12m\_hogar & numérica & media & 33024
 Personas\_rol\_cuidado\_hogar & numérica & media & 33024 & 0.939 & 131936 & 0.563 & 0.376 & 0.000 & ***\\
 Edad\_ponderada\_hogar & numérica & media & 33024 & 42.341 & 131936 & 42.016 & 0.326 & 0.013 & *\\
 Ocupados\_hogar & numérica & media & 33024 & 1.257 & 131936 & 1.566 & -0.309 & 0.000 & ***\\
-Subsidio\_transporte\_hogar & numérica & media & 33024 & 0.087 & 131936 & 0.391 & -0.304 & 0.000 & ***\\
 Personas\_con\_Subsidio\_transporte\_hogar & numérica & media & 33024 & 0.087 & 131936 & 0.391 & -0.304 & 0.000 & ***\\
 Estudiantes\_hogar & numérica & media & 33024 & 0.663 & 131936 & 0.385 & 0.279 & 0.000 & ***\\
 Menores\_cinco\_hogar & numérica & media & 33024 & 0.451 & 131936 & 0.180 & 0.270 & 0.000 & ***\\
@@ -51,11 +52,11 @@ Adolecentes\_hogar & numérica & media & 33024 & 0.389 & 131936 & 0.180 & 0.209 
 Cuenta\_propia\_hogar & numérica & media & 33024 & 0.860 & 131936 & 0.652 & 0.208 & 0.000 & ***\\
 Recibio\_prima\_servicios\_12m\_jefe & factor\_bin & proporción de "Si\_Recibio\_prima\_servicios\_12m\_jefe" & 33024 & 0.049 & 131936 & 0.245 & -0.196 & 0.000 & ***\\
 Personas\_con\_Recibio\_pensiones\_mes\_pasado\_hogar & numérica & media & 33024 & 0.013 & 131936 & 0.193 & -0.179 & 0.000 & ***\\
+Subsidio\_transporte\_hogar & factor\_bin & proporción de "Si" & 32949 & 0.083 & 122881 & 0.262 & -0.179 & 0.000 & ***\\
 Recibio\_arriendos\_o\_pensiones\_mes\_pasado\_jefe & factor\_bin & proporción de "Si\_Recibio\_arriendos\_o\_pensiones\_mes\_pasado\_jefe" & 33024 & 0.033 & 131936 & 0.213 & -0.179 & 0.000 & ***\\
 Desocupados\_hogar & numérica & media & 33024 & 0.319 & 131936 & 0.148 & 0.170 & 0.000 & ***\\
 Personas\_con\_Recibio\_prima\_navidad\_12m\_hogar & numérica & media & 33024 & 0.027 & 131936 & 0.185 & -0.157 & 0.000 & ***\\
 Personas\_con\_Recibio\_transferencias\_12m\_hogar & numérica & media & 33024 & 0.692 & 131936 & 0.538 & 0.154 & 0.000 & ***\\
-Subsidio\_familiar\_hogar & numérica & media & 33024 & 0.047 & 131936 & 0.178 & -0.131 & 0.000 & ***\\
 Personas\_con\_Subsidio\_familiar\_hogar & numérica & media & 33024 & 0.047 & 131936 & 0.178 & -0.131 & 0.000 & ***\\
 Recibio\_pensiones\_mes\_pasado\_jefe & factor\_bin & proporción de "Si\_Recibio\_pensiones\_mes\_pasado\_jefe" & 33024 & 0.010 & 131936 & 0.139 & -0.130 & 0.000 & ***\\
 Personas\_con\_Recibio\_prima\_vacaciones\_12m\_hogar & numérica & media & 33024 & 0.021 & 131936 & 0.149 & -0.128 & 0.000 & ***\\
@@ -64,6 +65,7 @@ Ayudas\_gobierno\_12m\_jefe & factor\_bin & proporción de "Si\_Ayudas\_gobierno
 Subsidio\_transporte\_jefe & factor\_bin & proporción de "Si\_Subsidio\_transporte\_jefe" & 33024 & 0.051 & 131936 & 0.166 & -0.115 & 0.000 & ***\\
 Personas\_con\_Dinero\_otroshogares\_pais\_12m\_hogar & numérica & media & 33024 & 0.344 & 131936 & 0.240 & 0.104 & 0.000 & ***\\
 Personas\_con\_Cesantias\_o\_intereses\_12m\_hogar & numérica & media & 33024 & 0.015 & 131936 & 0.114 & -0.099 & 0.000 & ***\\
+Subsidio\_familiar\_hogar & factor\_bin & proporción de "Si" & 33007 & 0.046 & 129250 & 0.140 & -0.094 & 0.000 & ***\\
 Disponibilidad\_comenzar\_en\_un\_mes\_jefe & factor\_bin & proporción de "Si" & 33024 & 0.215 & 131936 & 0.124 & 0.091 & 0.000 & ***\\
 Personas\_edad\_productiva\_hogar & numérica & media & 33024 & 1.395 & 131936 & 1.306 & 0.089 & 0.000 & ***\\
 Recibio\_prima\_navidad\_12m\_jefe & factor\_bin & proporción de "Si\_Recibio\_prima\_navidad\_12m\_jefe" & 33024 & 0.017 & 131936 & 0.101 & -0.084 & 0.000 & ***\\
@@ -111,8 +113,8 @@ Ingreso\_trabajo\_mes\_pasado\_desocupado\_jefe & factor\_bin & proporción de "
 Dinero\_residentes\_exterior\_12m\_jefe & factor\_bin & proporción de "Si\_Dinero\_residentes\_exterior\_12m\_jefe" & 33024 & 0.008 & 131936 & 0.014 & -0.005 & 0.000 & ***\\
 Personas\_con\_Ingreso\_trabajo\_mes\_pasado\_desocupado\_hogar & numérica & media & 33024 & 0.032 & 131936 & 0.027 & 0.004 & 0.000 & ***\\
 Otros\_en\_especie\_trabajo\_jefe & factor\_bin & proporción de "Si\_Otros\_en\_especie\_trabajo\_jefe" & 33024 & 0.000 & 131936 & 0.003 & -0.003 & 0.000 & ***\\
-Subsidio\_educativo\_hogar & numérica & media & 33024 & 0.000 & 131936 & 0.003 & -0.002 & 0.000 & ***\\
 Personas\_con\_Subsidio\_educativo\_hogar & numérica & media & 33024 & 0.000 & 131936 & 0.003 & -0.002 & 0.000 & ***\\
+Subsidio\_educativo\_hogar & factor\_bin & proporción de "Si" & 33024 & 0.000 & 131930 & 0.003 & -0.002 & 0.000 & ***\\
 Subsidio\_educativo\_jefe & factor\_bin & proporción de "Si\_Subsidio\_educativo\_jefe" & 33024 & 0.000 & 131936 & 0.002 & -0.002 & 0.000 & ***\\
 Personas\_con\_Recibio\_bonificaciones\_anuales\_12m\_hogar & numérica & media & 33024 & 0.000 & 131936 & 0.002 & -0.001 & 0.000 & ***\\
 Personas\_con\_Recibio\_pension\_alimentaria\_mes\_pasado\_hogar & numérica & media & 33024 & 0.014 & 131936 & 0.015 & -0.001 & 0.196 & \\
