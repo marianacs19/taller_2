@@ -1,0 +1,246 @@
+rm(list = ls())
+library(pacman)
+p_load(rio,           # import/export data
+       tidyverse,     # tidy-data
+       glmnet,        # To implement regularization algorithms. 
+       caret,         # Creating predictive models
+       scatterplot3d, # For 3D visualization
+       plotly         # For interactive 3D plots
+)
+library(caret)
+library(dplyr)
+library(e1071)  
+library(glmnet)
+library(rpart)
+library(rpart.plot)
+library(forcats)
+
+# 1) Directorio y carga ----
+setwd("/Users/marianacorrea/Desktop/PEG/Big data/Taller 2/taller_2/Data")
+
+train <- read_delim("train_collpase_hogar.csv", delim = ";")
+test  <- read_delim("test_collpase_hogar.csv",  delim = ";")
+
+# 2) Objetivo binario bien tipado ----
+# (evita el bug de as.numeric en factores)
+train <- train %>%
+  mutate(Pobre = as.integer(as.character(Pobre)))
+
+# 3) Variables del primer modelo (baseline LM) ----
+names(train)
+vars_modelo <- c(
+  "Urbano", "Nivel_educativo_jefe", "Subsidio_familiar_hogar", 
+  "Personas_hogar", "Mujer_jefe", "Años_educ_mean_hogar", "Oficio_jefe",
+  "Asalariados_hogar", "Educados_hogar", "Arriendo_pagado_mensual", "Afiliados_salud_hogar" 
+)
+
+train_mod <- train %>%
+  select(Pobre, all_of(vars_modelo)) %>%
+  drop_na()
+
+# 4) Split train/valid ----
+set.seed(123)
+idx <- sample(1:nrow(train_mod), 0.7 * nrow(train_mod))
+train_fit <- train_mod[idx, ]
+valid_fit <- train_mod[-idx, ]
+
+# 5) Modelo lineal (baseline de clasificación) ----
+modelo_lineal <- lm(Pobre ~ ., data = train_fit)
+summary(modelo_lineal)
+
+# 6) Predicciones en valid y búsqueda de umbral que maximiza F1 ----
+pred_val <- predict(modelo_lineal, newdata = valid_fit)
+
+umbrales <- seq(0.10, 0.90, by = 0.05)
+
+f1_scores <- sapply(umbrales, function(t) {
+  pred_bin <- ifelse(pred_val > t, 1, 0)
+  cm <- confusionMatrix(
+    data      = as.factor(pred_bin),
+    reference = as.factor(valid_fit$Pobre),
+    positive  = "1"
+  )
+  prec <- cm$byClass["Precision"]
+  rec  <- cm$byClass["Recall"]
+  2 * (prec * rec) / (prec + rec)
+})
+
+best_t  <- umbrales[which.max(f1_scores)]
+best_f1 <- max(f1_scores)
+
+cat("Umbral óptimo =", best_t, "con F1 =", round(best_f1, 3), "\n")
+
+# (Opcional) Ver métricas en el mejor umbral
+pred_val_best <- ifelse(pred_val > best_t, 1, 0)
+cm_best <- confusionMatrix(
+  data      = as.factor(pred_val_best),      # clases predichas
+  reference = as.factor(valid_fit$Pobre),    # clases reales
+  positive  = "1"                            # la clase "positiva" = pobre
+)
+
+cm_best
+
+# 7) Preparar test con las mismas columnas del modelo ----
+test_mod <- test %>%
+  select(all_of(vars_modelo)) %>%
+  mutate(across(everything(), ~replace_na(., 0)))  # simple imputación para evitar NAs
+
+# 8) Predicciones finales y clasificación con el umbral óptimo ----
+pred_test <- predict(modelo_lineal, newdata = test_mod)
+pred_test_class <- ifelse(pred_test > best_t, 1, 0)
+
+# 9) Archivo de envío para Kaggle ----
+submission <- tibble(id = test$id, Pobre = pred_test_class)
+
+write.csv(submission, "modelo1_regresion.csv", row.names = FALSE)
+
+
+
+
+
+
+# ==== OLS con BACKWARD SELECTION (BIC) sobre tus variables candidatas ====
+
+# 0) Define TUS variables candidatas (solo estas entran a competir)
+vars_candidate <- c(
+  # <<< EDITA ESTA LISTA >>>
+  "Urbano", "Nivel_educativo_jefe", "Subsidio_familiar_hogar", 
+  "Personas_hogar", "Mujer_jefe", "Años_educ_mean_hogar", "Oficio_jefe",
+  "Asalariados_hogar", "Educados_hogar", "Arriendo_pagado_mensual", "Afiliados_salud_hogar", "Propiedad_vivienda",
+  "Cuenta_propia_hogar", "Ancianos_hogar", "Adult_no_educ_hogar", "Personas_rol_cuidado_hogar", 
+  "Horas_extras_jefe", "Quiere_trabajar_mas_horas_jefe","Personas_unidad_gasto", 
+  "Ciudad_cat", "Desocupados_hogar", "Incapacitados_hogar", "Personas_con_Subsidio_alimentacion_hogar", 
+  "Actividad_semana_pasada_jefe", "Ingreso_pension_mes_pasado_jefe", "Ingreso_trabajo_mes_pasado_desocupado_jefe"
+)
+
+# 1) Preparación (solo Pobre + tus candidatas)
+train_bw <- train %>%
+  select(Pobre, all_of(vars_candidate)) %>%
+  mutate(across(where(is.character), as.factor)) %>%
+  mutate(across(where(is.numeric), ~replace_na(., 0))) %>%       # imputación simple numérica
+  mutate(across(where(is.factor),  ~fct_explicit_na(.))) %>%     # imputación simple en factores
+  select(Pobre, where(~ dplyr::n_distinct(.x, na.rm = TRUE) > 1))# elimina columnas constantes (menos Pobre)
+
+# Verificación mínima
+stopifnot("Pobre" %in% names(train_bw))
+stopifnot(nrow(train_bw) > 0)
+
+# 2) Split estratificado 70/30
+set.seed(123)
+idx <- createDataPartition(train_bw$Pobre, p = 0.7, list = FALSE)
+train_fit <- train_bw[idx, ]
+valid_fit <- train_bw[-idx, ]
+
+# 3) Modelos base
+modelo_full <- lm(Pobre ~ ., data = train_fit)     # parte con todas LAS CANDIDATAS
+modelo_null <- lm(Pobre ~ 1, data = train_fit)     # modelo vacío (referencia)
+
+# 4) Backward Selection con BIC (más parsimonioso)
+modelo_fw_bic <- step(
+  modelo_null,                                         # cambia: empieza vacío
+  scope = list(lower = modelo_null, upper = modelo_full),  # define el rango de búsqueda
+  direction = "forward",                               # cambia: dirección hacia adelante
+  k = log(nrow(train_fit)),                            # criterio BIC
+  trace = FALSE
+)
+
+
+cat("\nVariables seleccionadas por Backward+BIC:\n")
+selected_vars <- names(modelo_bw_bic$model)[-1]
+print(selected_vars)
+
+# 5) Evaluación en validación — F1 con umbral óptimo
+pred_val <- predict(modelo_bw_bic, newdata = valid_fit)
+
+umbrales <- seq(0.05, 0.95, by = 0.02)
+f1_scores <- sapply(umbrales, function(t){
+  pred_bin <- ifelse(pred_val > t, 1, 0)
+  cm <- confusionMatrix(as.factor(pred_bin), as.factor(valid_fit$Pobre), positive = "1")
+  pr <- cm$byClass["Precision"]; rc <- cm$byClass["Recall"]
+  2*(pr*rc)/(pr+rc)
+})
+best_t  <- umbrales[which.max(f1_scores)]
+best_f1 <- max(f1_scores)
+
+cat(sprintf("\nBackward+BIC — threshold* = %.2f | F1* = %.3f\n", best_t, best_f1))
+cm_best <- confusionMatrix(as.factor(ifelse(pred_val > best_t,1,0)),
+                           as.factor(valid_fit$Pobre), positive = "1")
+print(cm_best)
+
+# 6) Predicción en TEST y CSV (alineando tipos)
+# Prepara test SOLO con las variables seleccionadas
+test_mod <- test %>%
+  select(all_of(selected_vars)) %>%
+  mutate(across(where(is.character), as.factor)) %>%
+  mutate(across(where(is.numeric), ~replace_na(., 0))) %>%
+  mutate(across(where(is.factor),  ~fct_explicit_na(.)))
+
+pred_test <- predict(modelo_bw_bic, newdata = test_mod)
+pred_test_class <- ifelse(pred_test > best_t, 1, 0)
+
+submission_bw <- tibble(id = test$id, Pobre = pred_test_class)
+write_csv(submission_bw, "reg_forward.csv")
+cat("Archivo guardado: Backward_BIC_OLS_bestF1.csv\n")
+
+
+
+
+
+
+###### NAIVE BAYES 
+library(e1071)
+library(caret)
+library(tidyverse)
+library(forcats)
+
+# Variables candidatas
+vars_modelo <- setdiff(names(train), c("id","Pobre"))
+
+# Ensamble y limpieza
+train_nb <- train %>%
+  select(Pobre, all_of(vars_modelo)) %>%
+  mutate(across(where(is.character), as.factor)) %>%           # texto → factor
+  mutate(across(where(is.numeric), ~replace_na(., 0))) %>%     # NAs numéricos → 0 (simple)
+  mutate(across(where(is.factor),  ~fct_explicit_na(.))) %>%   # NAs factor → nivel "NA"
+  select(Pobre, where(~ dplyr::n_distinct(.x, na.rm = TRUE) > 1)) # quitar columnas constantes
+
+# Target como factor "0"/"1"
+train_nb <- train_nb %>% mutate(Pobre = factor(as.character(Pobre), levels = c("0","1")))
+
+set.seed(123)
+idx <- createDataPartition(train_nb$Pobre, p = 0.7, list = FALSE)
+train_fit <- train_nb[idx, ]
+valid_fit <- train_nb[-idx, ]
+
+# sin balancear
+# Laplace=1 evita probabilidades cero en categorías raras
+modelo_nb <- naiveBayes(Pobre ~ ., data = train_fit, laplace = 1)
+modelo_nb
+
+# Probabilidad de clase positiva ("1" = pobre)
+pred_val_prob <- predict(modelo_nb, newdata = valid_fit, type = "raw")[, "1"]
+
+umbrales <- seq(0.05, 0.95, by = 0.02)
+f1_scores_nb <- sapply(umbrales, function(t){
+  pred_bin <- ifelse(pred_val_prob > t, 1, 0)
+  cm <- confusionMatrix(as.factor(pred_bin), valid_fit$Pobre, positive = "1")
+  pr <- cm$byClass["Precision"]; rc <- cm$byClass["Recall"]
+  2*(pr*rc)/(pr+rc)
+})
+best_t_nb  <- umbrales[which.max(f1_scores_nb)]
+best_f1_nb <- max(f1_scores_nb)
+cat("NB — threshold* =", best_t_nb, "| F1* =", round(best_f1_nb, 3), "\n")
+
+
+p_load("pROC") # Paquete para calcular y visualizar curvas ROC
+roc_obj_en<-roc(response=glm_model_en_sens$pred$obs[glm_model_en_sens$pred$lambda==glm_model_en_sens$bestTune$lambda],  # Valores reales de la variable objetivo
+                predictor=glm_model_en_sens$pred$desempleado[glm_model_en_sens$pred$lambda==glm_model_en_sens$bestTune$lambda], # Probabilidades predichas por el modelo
+                levels = c("empleado", "desempleado"),  # # Establece la referencia control y caso (empleado = negativo, desempleado = positivo) 
+                direction = "<")  # "<" significa que "desempleado" es positivo
+
+rfThresh_en <- coords(roc_obj_en, x = "best", best.method = "closest.topleft")
+rfThresh_en
+
+
+
+
