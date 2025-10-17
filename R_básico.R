@@ -20,7 +20,8 @@ p_load(
   rpart,         # To implement decision trees.
   rpart.plot,    # To plot trees.
   caret,         # To estimate predictive models.
-  Metrics 
+  Metrics,
+  kableExtra
 )
 
 # =========================================================
@@ -252,6 +253,24 @@ dict_df <- tribble(
   "Ocupado_jefe","1","Ocupado",
   "Inactivo_jefe","0","No_inactivo",
   "Inactivo_jefe","1","Inactivo",
+  "Quiere_trabajar_mas_horas_jefe","0","No",
+  "Quiere_trabajar_mas_horas_jefe","1","Si",
+  "Diligencias_cambiar_trabajo_ult4s_jefe","0","No",
+  "Diligencias_cambiar_trabajo_ult4s_jefe","1","Si",
+  "Diligencias_trabajar_mas_horas_ult4s_jefe","0","No", 
+  "Diligencias_trabajar_mas_horas_ult4s_jefe","1","Si", 
+  "Disponibilidad_comenzar_en_un_mes_jefe","0","No",
+  "Disponibilidad_comenzar_en_un_mes_jefe","1","Si",
+  "Disponible_trabajar_mas_horas_jefe","0","No",
+  "Disponible_trabajar_mas_horas_jefe","1","Si",
+  "Poblacion_edad_trabajar_jefe","0","No",
+  "Poblacion_edad_trabajar_jefe","1","Si",
+  "Subsidio_educativo_hogar" ,"0","No",
+  "Subsidio_educativo_hogar","1","Si",
+  "Subsidio_familiar_hogar","0","No",
+  "Subsidio_familiar_hogar","1","Si",
+  "Subsidio_transporte_hogar","0","No",
+  "Subsidio_transporte_hogar","1","Si",
 ) |> mutate(across(everything(), as.character))
 
 ##Aplicar labels
@@ -274,7 +293,7 @@ ctrl <- trainControl(
 set.seed(2025)
 
 model1 <- train(
-  Pobre~Urbano+Departamento+Espacios_hogar+Dormitorios_hogar+Propiedad_vivienda+Personas_hogar+Oficio_C8_jefe,
+  Pobre~Años_educ_jefe+Años_educ_mean_hogar+Edad_jefe+Horas_trabajadas_hogar+Li+Lp+Pctg_Personas_edad_productiva_hogar+Personas_hogar+Ciudad_cat+Urbano+Espacios_hogar+Subsidio_transporte_jefe+Dormitorios_hogar+Propiedad_vivienda+Personas_hogar+Oficio_C8_jefe,
   data=train_def,
   method = "glm",
   trControl = ctrl, 
@@ -375,22 +394,29 @@ overall_summary_table <- function(df, exclude = NULL, digits = 3) {
 }
 
 # ==== (2) Diferencias de medias por pobreza (Welch t-test) ====
-diff_means_by_poverty <- function(df, poverty_var, poor_level = NULL, digits = 3) {
+# ==== NUEVO: diferencias (medias para numéricas, proporciones para factor binario) ====
+diff_effects_by_poverty <- function(df,
+                                    poverty_var,
+                                    poor_level = NULL,
+                                    digits = 3,
+                                    # Opcional: define el nivel "éxito" para algún factor binario
+                                    success_map = NULL,    # lista o named character: list(var="Sí") / c(var="Sí")
+                                    success_ref = c("second","first")) {
+  
   stopifnot(poverty_var %in% names(df))
+  success_ref <- match.arg(success_ref)
   pov <- .to_poverty01(df[[poverty_var]], poor_level = poor_level)
   df2 <- df |> mutate(`__poverty__` = pov)
   
+  # --- NUMÉRICAS -> Welch t-test ---
   num_vars <- names(df2)[sapply(df2, is.numeric)]
   num_vars <- setdiff(num_vars, "__poverty__")
   
-  res <- map_dfr(num_vars, function(v) {
+  res_num <- map_dfr(num_vars, function(v) {
     x  <- df2[[v]]
     g1 <- x[df2$`__poverty__` == 1]
     g0 <- x[df2$`__poverty__` == 0]
-    ok1 <- sum(!is.na(g1)) > 1
-    ok0 <- sum(!is.na(g0)) > 1
-    tt <- if (ok1 && ok0) try(t.test(g1, g0), silent = TRUE) else NA
-    
+    tt <- if (sum(!is.na(g1))>1 && sum(!is.na(g0))>1) try(t.test(g1, g0), silent = TRUE) else NULL
     pval <- if (inherits(tt, "htest")) tt$p.value else NA_real_
     sig  <- ifelse(is.na(pval), "",
                    ifelse(pval < .001, "***",
@@ -399,19 +425,66 @@ diff_means_by_poverty <- function(df, poverty_var, poor_level = NULL, digits = 3
                                         ifelse(pval < .1,   "•", "")))))
     
     tibble(
-      variable        = v,
-      n_pobre         = sum(!is.na(g1)),
-      media_pobre     = mean(g1, na.rm = TRUE),
-      n_no_pobre      = sum(!is.na(g0)),
-      media_no_pobre  = mean(g0, na.rm = TRUE),
-      diferencia      = mean(g1, na.rm = TRUE) - mean(g0, na.rm = TRUE),
-      p_value         = pval,
-      signif          = sig
+      variable    = v,
+      tipo        = "numérica",
+      medida      = "media",
+      n_pobre     = sum(!is.na(g1)),
+      est_pobre   = mean(g1, na.rm = TRUE),
+      n_no_pobre  = sum(!is.na(g0)),
+      est_no_pobre= mean(g0, na.rm = TRUE),
+      diferencia  = mean(g1, na.rm = TRUE) - mean(g0, na.rm = TRUE),
+      p_value     = pval,
+      Sig.        = sig
     )
-  }) |>
+  })
+  
+  # --- FACTOR BINARIO -> prop.test ---
+  is_bin_factor <- function(x) is.factor(x) && (nlevels(x) == 2)
+  fac_vars <- names(df2)[sapply(df2, is_bin_factor)]
+  fac_vars <- setdiff(fac_vars, c(poverty_var))  # excluye la propia pobreza
+  
+  res_fac <- map_dfr(fac_vars, function(v) {
+    f <- df2[[v]]
+    levs <- levels(f)
+    # Determinar "éxito" (nivel 1)
+    target <- if (!is.null(success_map) && !is.null(unname(success_map[[v]]))) {
+      as.character(success_map[[v]])
+    } else if (success_ref == "second") {
+      levs[2]
+    } else levs[1]
+    
+    z <- as.integer(f == target)
+    z1 <- z[df2$`__poverty__` == 1]
+    z0 <- z[df2$`__poverty__` == 0]
+    a  <- sum(z1 == 1, na.rm = TRUE); n1 <- sum(!is.na(z1))
+    b  <- sum(z0 == 1, na.rm = TRUE); n0 <- sum(!is.na(z0))
+    
+    pt <- if (n1>0 && n0>0) try(prop.test(x = c(a,b), n = c(n1,n0)), silent = TRUE) else NULL
+    pval <- if (inherits(pt, "htest")) pt$p.value else NA_real_
+    sig  <- ifelse(is.na(pval), "",
+                   ifelse(pval < .001, "***",
+                          ifelse(pval < .01,  "**",
+                                 ifelse(pval < .05,  "*",
+                                        ifelse(pval < .1,   "•", "")))))
+    
+    tibble(
+      variable     = v,
+      tipo         = "factor_bin",
+      medida       = paste0('proporción de "', target, '"'),
+      n_pobre      = n1,
+      est_pobre    = ifelse(n1>0, a/n1, NA_real_),
+      n_no_pobre   = n0,
+      est_no_pobre = ifelse(n0>0, b/n0, NA_real_),
+      diferencia   = (ifelse(n1>0, a/n1, NA_real_) - ifelse(n0>0, b/n0, NA_real_)),
+      p_value      = pval,
+      Sig.         = sig
+    )
+  })
+  
+  out <- bind_rows(res_num, res_fac) |>
     mutate(across(where(is.numeric), ~round(.x, digits))) |>
     arrange(desc(abs(diferencia)))
-  res
+  out
 }
 
 # ==== (A) Funciones helper para exportar a LaTeX con kableExtra ====
@@ -446,7 +519,13 @@ to_latex_file <- function(df, caption, label, file, digits = 3, col_names = NULL
 }
 
 overall <- overall_summary_table(train_def, exclude = c("id"))
-diffm   <- diff_means_by_poverty(train_def, poverty_var = "Pobre", poor_level = "Pobre")
+diff_mix <- diff_effects_by_poverty(
+  train_def,
+  poverty_var = "Pobre",       # nombre de tu variable de pobreza
+  poor_level  = "Pobre",       # el nivel que indica pobreza (si no es 0/1)
+  # success_map = list(TuVariableFactor="Sí"),  # opcional: define "éxito"
+  success_ref = "second"       # usa el 2º nivel como éxito por defecto
+)
                                  
 overall_out <- overall |>
   rename(
@@ -454,12 +533,26 @@ overall_out <- overall |>
     `Media` = media, `Desv. Est.` = sd, `Mín` = min, `Máx` = max,
     `N niveles` = n_niveles, `Modo` = modo, `Modo (%)` = modo_porcentaje
   )
-diffm_out <- diffm |>
+diff_mix_out <- diff_mix |>
   rename(
-    `Variable` = variable, `N pobre` = n_pobre, `Media pobre` = media_pobre,
-    `N no pobre` = n_no_pobre, `Media no pobre` = media_no_pobre,
-    `Dif.` = diferencia, `p-valor` = p_value, `Sig.` = signif
+    Variable = variable, `Tipo` = tipo, `Medida` = medida,
+    `N pobre` = n_pobre, `Est. pobre` = est_pobre,
+    `N no pobre` = n_no_pobre, `Est. no pobre` = est_no_pobre,
+    `Dif.` = diferencia, `p-valor` = p_value
   )
+
+to_latex_file(
+  overall_out,
+  caption = "Resumen descriptivo de todas las variables.",
+  label   = "tab:resumen_todas",
+  file    = "tabla_resumen_todas.tex"
+)
+to_latex_file(
+  diff_mix_out,
+  caption = "Diferencias por condición de pobreza: medias (numéricas) y proporciones (factores binarios).",
+  label   = "tab:diff_mix_pobreza",
+  file    = "tabla_diff_mix_pobreza.tex"
+)
 
 # =========================================================
 # Fin -----------------------------------------------------
