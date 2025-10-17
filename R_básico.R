@@ -563,27 +563,6 @@ head(predictSample)
 # nombre
 write.csv(predictSample,"Estimations/XBOOST_NR250_MD_4_ETA_0-05_GAM_0_CBT_066_MIN_CHI_W_10_SB04.csv", row.names = FALSE)
 
-
-roc_obj_en<-roc(response=Xgboost_tree$pred$obs[(Xgboost_tree$pred$eta==Xgboost_tree$bestTune$eta)&
-                                               (Xgboost_tree$pred$max_depth==Xgboost_tree$bestTune$max_depth)&
-                                               (Xgboost_tree$pred$gamma==Xgboost_tree$bestTune$gamma)&
-                                               (Xgboost_tree$pred$colsample_bytree==Xgboost_tree$bestTune$colsample_bytree)&
-                                               (Xgboost_tree$pred$nrounds==Xgboost_tree$bestTune$nrounds)&
-                                               (Xgboost_tree$pred$min_child_weight==Xgboost_tree$bestTune$min_child_weight)&
-                                               (Xgboost_tree$pred$subsample==Xgboost_tree$bestTune$subsample)],  # Valores reales de la variable objetivo
-                predictor=Xgboost_tree$pred$Pobre[(Xgboost_tree$pred$eta==Xgboost_tree$bestTune$eta)&
-                                                    (Xgboost_tree$pred$max_depth==Xgboost_tree$bestTune$max_depth)&
-                                                    (Xgboost_tree$pred$gamma==Xgboost_tree$bestTune$gamma)&
-                                                    (Xgboost_tree$pred$colsample_bytree==Xgboost_tree$bestTune$colsample_bytree)&
-                                                    (Xgboost_tree$pred$nrounds==Xgboost_tree$bestTune$nrounds)&
-                                                    (Xgboost_tree$pred$min_child_weight==Xgboost_tree$bestTune$min_child_weight)&
-                                                    (Xgboost_tree$pred$subsample==Xgboost_tree$bestTune$subsample)], # Probabilidades predichas por el modelo
-                levels = c("No_pobre", "Pobre"),  # # Establece la referencia control y caso (empleado = negativo, desempleado = positivo) 
-                direction = "<")  # "<" significa que "desempleado" es positivo
-
-rfThresh_en <- coords(roc_obj_en, x = "best", best.method = "closest.topleft")
-rfThresh_en
-
 # Estadísticas descriptivas
 
 # ==== (1) Resumen compacto de TODAS las variables ====
