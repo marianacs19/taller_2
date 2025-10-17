@@ -330,6 +330,69 @@ head(predictSample)
 # nombre
 write.csv(predictSample,"Estimations/modelo1_pruebav1_15_10_2025.csv", row.names = FALSE)
 
+
+# Modelo 2
+# 
+ctrl <- trainControl(
+  method = "cv",
+  number = 5,
+  classProbs = TRUE,
+  savePredictions = TRUE
+)
+
+set.seed(2025)
+
+model1 <- train(
+  Pobre~Años_educ_jefe+Años_educ_mean_hogar+Edad_jefe+Horas_trabajadas_hogar+Li+Lp+Pctg_Personas_edad_productiva_hogar+Personas_hogar+Ciudad_cat+Urbano+Espacios_hogar+Subsidio_transporte_jefe+Dormitorios_hogar+Propiedad_vivienda+Personas_hogar+Oficio_C8_jefe,
+  data=train_def,
+  method = "glm",
+  trControl = ctrl, 
+  family = "binomial"
+)
+
+# Since we're predicting with an object created by `caret`, some arguments changed.
+# In particular, to predict class probabilities we use `type = 'prob'`, and to
+# predict class labels we use `type = 'raw'`. 
+predict_logit <- data.frame(
+  Pobre = train_def$Pobre,                                           ## observed class labels
+  P_hat = predict(model1, newdata = train_def, type = "prob"),    ## predicted class probabilities
+  pred = predict(model1, newdata = train_def, type = "raw")      ## predicted class labels
+)
+
+head(predict_logit)
+
+cm <- confusionMatrix(data = predict_logit$pred, reference = predict_logit$Pobre, positive = "Pobre")
+cm
+
+# Cutoff out
+
+p_load("pROC") # Paquete para calcular y visualizar curvas ROC
+
+roc_obj_en<-roc(response=model1$pred$obs,  # Valores reales de la variable objetivo
+                predictor=model1$pred$Pobre , # Probabilidades predichas por el modelo
+                levels = c("No_pobre", "Pobre"),  # # Establece la referencia control y caso (No_pobre = negativo, Pobre = positivo) 
+                direction = "<")  # "<" significa que "desempleado" es positivo
+
+rfThresh_en <- coords(roc_obj_en, x = "best", best.method = "closest.topleft")
+rfThresh_en
+
+###Formateo a KAGGLE
+
+predictSample <- test_def |>
+  mutate(.prob = predict(model1, newdata = test_def, type = "prob") |> as.data.frame()) |>
+  unnest_wider(.prob) |>
+  select(id, Pobre)    # esta columna viene del nombre de la clase
+
+head(predictSample)
+
+predictSample <- predictSample |> 
+  mutate(pobre=ifelse(Pobre>=rfThresh_en$threshold,1,0)) |>
+  select(id, pobre)
+head(predictSample)            
+
+# nombre
+write.csv(predictSample,"Estimations/modelo2_cutoff0.2062748.csv", row.names = FALSE)
+
 # Estadísticas descriptivas
 
 # ==== (1) Resumen compacto de TODAS las variables ====
