@@ -255,8 +255,8 @@ dict_df <- tribble(
 train_def <- apply_labels_from_dict(train, dict_df)
 test_def <- apply_labels_from_dict(test, dict_df)
 
-save(test_def, file="Data/test_def.R")
-save(train_def, file="Data/train_def.R")
+save(test_def, file="Data/test_def.RData")
+save(train_def, file="Data/train_def.RData")
 
 # Modelo 1
 # 
@@ -307,104 +307,9 @@ head(predictSample)
 # nombre
 write.csv(predictSample,"Estimations/modelo1_pruebav1_15_10_2025.csv", row.names = FALSE)
 
-# Modelo 2
+# Estadísticas descriptivas
 
-ctrl <- trainControl(
-  method = "cv",
-  number = 5,
-  classProbs = TRUE,
-  savePredictions = TRUE,
-  preProcOptions = c("center", "scale")
-)
 
-set.seed(2025)
-
-model1 <- train(
-  Pobre~Urbano+Departamento+Espacios_hogar+Dormitorios_hogar+Propiedad_vivienda+Personas_hogar+Oficio_C8_jefe,
-  data=train_def,
-  method = "glm",
-  trControl = ctrl, 
-  family = "binomial"
-)
-
-# Since we're predicting with an object created by `caret`, some arguments changed.
-# In particular, to predict class probabilities we use `type = 'prob'`, and to
-# predict class labels we use `type = 'raw'`. 
-predict_logit <- data.frame(
-  Pobre = train_def$Pobre,                                           ## observed class labels
-  P_hat = predict(model1, newdata = train_def, type = "prob"),    ## predicted class probabilities
-  pred = predict(model1, newdata = train_def, type = "raw")      ## predicted class labels
-)
-
-head(predict_logit)
-
-cm <- confusionMatrix(data = predict_logit$pred, reference = predict_logit$Pobre, positive = "Pobre")
-cm
-
-###Formateo a KAGGLE
-
-predictSample <- test_def |>
-  mutate(pobre_lab = predict(model1, newdata = test_def, type = "raw")) |>
-  select(id,pobre_lab)
-
-head(predictSample)
-
-predictSample <- predictSample |> 
-  mutate(pobre=ifelse(pobre_lab=="Pobre",1,0)) |>
-  select(id, pobre)
-head(predictSample)            
-
-# nombre
-write.csv(predictSample,"Estimations/modelo1_pruebav1_15_10_2025.csv", row.names = FALSE)
-
-#############################hasta acá###########################
-# =========================================================
-# Diseño de encuesta con pesos (srvyr) --------------------
-# =========================================================
-# Si tu base tiene conglomeración/estratos, agrega ids/strata.
-# Aquí un diseño simple con solo pesos.
-if (weight_var %in% names(df)) {
-  design <- df |>
-    mutate(across(all_of(weight_var), as.numeric)) |>
-    as_survey_design(
-      ids = 1,                      # sin conglomeración (cambiar si aplica)
-      weights = !!rlang::sym(weight_var)
-    )
-} else {
-  warning(sprintf("La columna de pesos '%s' no existe en df. Se omite el diseño de encuesta.", weight_var))
-  design <- NULL
-}
-
-# =========================================================
-# Ejemplos de uso -----------------------------------------
-# =========================================================
-
-# 1) Conteo simple por etiqueta (factor):
-if ("sexo" %in% names(df)) {
-  conteo_sexo <- df |>
-    count(sexo, name = "n")
-  print(conteo_sexo)
-}
-
-# 2) Media ponderada (si hay diseño con pesos):
-#    Ejemplo: media de 'ingreso' por 'sexo'
-if (!is.null(design) && all(c("sexo","ingreso") %in% names(df))) {
-  resumen_ingreso <- design |>
-    group_by(sexo) |>
-    summarise(
-      ingreso_prom = survey_mean(ingreso, na.rm = TRUE),
-      .groups = "drop"
-    )
-  print(resumen_ingreso)
-}
-
-# 3) Si quieres asegurar tipos numéricos para variables cuantitativas:
-# numeric_vars <- c("ingreso","edad","tam_hogar")
-# df <- df |> mutate(across(all_of(numeric_vars), ~ suppressWarnings(as.numeric(.))))
-
-# 4) Guardar una versión procesada
-# write_rds(df, "data/clean/df_etiquetado.rds")
-# if (!is.null(design)) saveRDS(design, "data/clean/design_srvyr.rds")
 
 # =========================================================
 # Fin -----------------------------------------------------
