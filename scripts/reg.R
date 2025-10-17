@@ -19,13 +19,13 @@ library(forcats)
 
 wd_main <- "taller_2"
 wd_code <- "scripts"
-wd_models <- "Estimations"
+wd_outputs <- "Estimations"
 wd_data <- "Data"
 
 
 # Cargando bases -----------------------------------------------------
-train <- read_delim(paste0(wd_data, "/train_collpase_hogar.csv"), delim = ";")
-train <- read_delim(paste0(wd_data, "/test_collpase_hogar.csv"), delim = ";")
+train <- load(paste0(wd_data, "/train_def.RData"))
+test <- load(paste0(wd_data, "/test_def.RData"))
 
 
 # Modelo 1 regresión lineal -----------------------------------------------------
@@ -37,11 +37,8 @@ vars_modelo <- c(
   "Asalariados_hogar", "Educados_hogar", "Arriendo_pagado_mensual", "Afiliados_salud_hogar" 
 )
 
-train <- train %>%
-  mutate(Pobre = as.integer(as.character(Pobre)))
-
 train_mod <- train %>%
-  select(pobre, all_of(vars_modelo)) %>%
+  select(Pobre, all_of(vars_modelo)) %>%
   drop_na()
 
 # Dividir la muestra
