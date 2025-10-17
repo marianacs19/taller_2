@@ -27,15 +27,25 @@ wd_data <- "Data"
 train <- load(paste0(wd_data, "/train_def.RData"))
 test <- load(paste0(wd_data, "/test_def.RData"))
 
+train <- train_def
+test  <- test_def
+
+train <- train %>%
+  mutate(arriendo_compilado_hogar = coalesce(Arriendo_estimado_mensual, Arriendo_pagado_mensual))
+
+test <- test %>%
+  mutate(arriendo_compilado_hogar = coalesce(Arriendo_estimado_mensual, Arriendo_pagado_mensual))
 
 # Modelo 1 regresión lineal -----------------------------------------------------
 # Definir variables
 names(train)
 vars_modelo <- c(
   "Urbano", "Nivel_educativo_jefe", "Subsidio_familiar_hogar", 
-  "Personas_hogar", "Mujer_jefe", "Años_educ_mean_hogar", "Oficio_jefe",
-  "Asalariados_hogar", "Educados_hogar", "Arriendo_pagado_mensual", "Afiliados_salud_hogar" 
+  "Personas_hogar", "Mujer_jefe", "Años_educ_mean_hogar", "arriendo_compilado_hogar",
+  "Asalariados_hogar", "Educados_hogar","Afiliados_salud_hogar" 
 )
+
+train$Pobre <- ifelse(train$Pobre == "Pobre", 1, 0)
 
 train_mod <- train %>%
   select(Pobre, all_of(vars_modelo)) %>%
@@ -48,7 +58,7 @@ train_fit <- train_mod[idx, ]
 valid_fit <- train_mod[-idx, ]
 
 # Modelo 
-modelo_lineal <- lm(Pobre ~ ., data = train_fit)
+modelo_lineal <- lm(Pobre ~., data = train_fit)
 summary(modelo_lineal)
 
 # Cutoff
@@ -74,14 +84,11 @@ best_f1 <- max(f1_scores)
 cat("Cutoff =", best_t, "con F1 =", round(best_f1, 3), "\n")
 
 # Fuera de muestra 
-test_mod <- test %>%
-  select(all_of(vars_modelo)) %>%
-  mutate(across(everything(), ~replace_na(., 0)))
-
-pred_test <- predict(modelo_lineal, newdata = test_mod)
+pred_test <- predict(modelo_lineal, newdata = test)
 pred_test_class <- ifelse(pred_test > best_t, 1, 0)
 
 # Archivo
 prediccion <- tibble(id = test$id, Pobre = pred_test_class)
-write.csv(prediccion, paste0(wd_estimations, "/modelo_regresion.csv"), row.names = FALSE)
+write.csv(prediccion, paste0(wd_outputs, "/modelo_regresion.csv"), row.names = FALSE)
+
 
