@@ -592,24 +592,37 @@ overall_summary_table <- function(df, exclude = NULL, digits = 3) {
     )
   }
   
-  # --- Categóricas ---
+  # --- Categóricas (arreglo: calcular p y modo por variable) ---
   cat_vars <- dplyr::select(df, where(is_cat))
   if (ncol(cat_vars) > 0) {
-    cat_tbl <- cat_vars |>
+    # 1) Conteos por nivel (excluye NA)
+    cat_counts <- cat_vars |>
       dplyr::mutate(dplyr::across(everything(), as.character)) |>
       tidyr::pivot_longer(everything(), names_to = "variable", values_to = "value") |>
       dplyr::filter(!is.na(value)) |>
-      dplyr::count(variable, value, name = "n_value") |>
+      dplyr::count(variable, value, name = "n_value")
+    
+    # 2) Totales por variable
+    tot <- cat_counts |>
+      dplyr::summarise(
+        n         = sum(n_value),
+        n_niveles = dplyr::n_distinct(value),
+        .by = "variable"
+      )
+    
+    # 3) Modo y su porcentaje (agrupado por variable)
+    modes <- cat_counts |>
       dplyr::group_by(variable) |>
       dplyr::mutate(p = n_value / sum(n_value)) |>
-      dplyr::slice_max(order_by = n_value, n = 1, with_ties = FALSE) |>
-      dplyr::summarise(
-        n               = sum(n_value),
-        n_niveles       = dplyr::n_distinct(value),
-        modo            = dplyr::first(value),
-        modo_porcentaje = dplyr::first(p),
-        .groups = "drop"
-      ) |>
+      dplyr::slice_max(n_value, n = 1, with_ties = FALSE) |>
+      dplyr::ungroup() |>
+      dplyr::transmute(
+        variable,
+        modo            = value,
+        modo_porcentaje = p
+      )
+    
+    cat_tbl <- dplyr::left_join(tot, modes, by = "variable") |>
       dplyr::mutate(tipo = "categórica")
   } else {
     cat_tbl <- tibble::tibble(
@@ -618,7 +631,7 @@ overall_summary_table <- function(df, exclude = NULL, digits = 3) {
     )
   }
   
-  # --- Unir y ordenar columnas ---
+  # --- Unir y redondear ---
   out <- dplyr::bind_rows(num_tbl, cat_tbl) |>
     dplyr::mutate(dplyr::across(where(is.numeric), ~round(.x, digits))) |>
     dplyr::relocate(variable, tipo)
@@ -626,26 +639,24 @@ overall_summary_table <- function(df, exclude = NULL, digits = 3) {
   out
 }
 
-# ==== (2) Diferencias de medias por pobreza (Welch t-test) ====
-# ==== NUEVO: diferencias (medias para numéricas, proporciones para factor binario) ====
+# ==== (2) Diferencias de medias por pobreza (Welch t-test)
+#      y proporciones para factores binarios ====
 diff_effects_by_poverty <- function(df,
                                     poverty_var,
                                     poor_level = NULL,
                                     digits = 3,
-                                    # Opcional: define el nivel "éxito" para algún factor binario
-                                    success_map = NULL,    # lista o named character: list(var="Sí") / c(var="Sí")
+                                    success_map = NULL,    # list(var="Sí") o c(var="Sí")
                                     success_ref = c("second","first")) {
-  
   stopifnot(poverty_var %in% names(df))
   success_ref <- match.arg(success_ref)
   pov <- .to_poverty01(df[[poverty_var]], poor_level = poor_level)
-  df2 <- df |> mutate(`__poverty__` = pov)
+  df2 <- df |> dplyr::mutate(`__poverty__` = pov)
   
   # --- NUMÉRICAS -> Welch t-test ---
   num_vars <- names(df2)[sapply(df2, is.numeric)]
   num_vars <- setdiff(num_vars, "__poverty__")
   
-  res_num <- map_dfr(num_vars, function(v) {
+  res_num <- purrr::map_dfr(num_vars, function(v) {
     x  <- df2[[v]]
     g1 <- x[df2$`__poverty__` == 1]
     g0 <- x[df2$`__poverty__` == 0]
@@ -657,17 +668,17 @@ diff_effects_by_poverty <- function(df,
                                  ifelse(pval < .05,  "*",
                                         ifelse(pval < .1,   "•", "")))))
     
-    tibble(
-      variable    = v,
-      tipo        = "numérica",
-      medida      = "media",
-      n_pobre     = sum(!is.na(g1)),
-      est_pobre   = mean(g1, na.rm = TRUE),
-      n_no_pobre  = sum(!is.na(g0)),
-      est_no_pobre= mean(g0, na.rm = TRUE),
-      diferencia  = mean(g1, na.rm = TRUE) - mean(g0, na.rm = TRUE),
-      p_value     = pval,
-      Sig.        = sig
+    tibble::tibble(
+      variable     = v,
+      tipo         = "numérica",
+      medida       = "media",
+      n_pobre      = sum(!is.na(g1)),
+      est_pobre    = mean(g1, na.rm = TRUE),
+      n_no_pobre   = sum(!is.na(g0)),
+      est_no_pobre = mean(g0, na.rm = TRUE),
+      diferencia   = mean(g1, na.rm = TRUE) - mean(g0, na.rm = TRUE),
+      p_value      = pval,
+      Sig.         = sig
     )
   })
   
@@ -676,17 +687,16 @@ diff_effects_by_poverty <- function(df,
   fac_vars <- names(df2)[sapply(df2, is_bin_factor)]
   fac_vars <- setdiff(fac_vars, c(poverty_var))  # excluye la propia pobreza
   
-  res_fac <- map_dfr(fac_vars, function(v) {
+  res_fac <- purrr::map_dfr(fac_vars, function(v) {
     f <- df2[[v]]
     levs <- levels(f)
-    # Determinar "éxito" (nivel 1)
     target <- if (!is.null(success_map) && !is.null(unname(success_map[[v]]))) {
       as.character(success_map[[v]])
     } else if (success_ref == "second") {
       levs[2]
     } else levs[1]
     
-    z <- as.integer(f == target)
+    z  <- as.integer(f == target)
     z1 <- z[df2$`__poverty__` == 1]
     z0 <- z[df2$`__poverty__` == 0]
     a  <- sum(z1 == 1, na.rm = TRUE); n1 <- sum(!is.na(z1))
@@ -700,7 +710,7 @@ diff_effects_by_poverty <- function(df,
                                  ifelse(pval < .05,  "*",
                                         ifelse(pval < .1,   "•", "")))))
     
-    tibble(
+    tibble::tibble(
       variable     = v,
       tipo         = "factor_bin",
       medida       = paste0('proporción de "', target, '"'),
@@ -714,13 +724,13 @@ diff_effects_by_poverty <- function(df,
     )
   })
   
-  out <- bind_rows(res_num, res_fac) |>
-    mutate(across(where(is.numeric), ~round(.x, digits))) |>
-    arrange(desc(abs(diferencia)))
+  out <- dplyr::bind_rows(res_num, res_fac) |>
+    dplyr::mutate(dplyr::across(where(is.numeric), ~round(.x, digits))) |>
+    dplyr::arrange(dplyr::desc(abs(diferencia)))
   out
 }
 
-# ==== (A) Funciones helper para exportar a LaTeX con kableExtra ====
+# ==== (A) Helper: exportar a LaTeX con kableExtra ====
 to_latex_file <- function(df, caption, label, file, digits = 3, col_names = NULL) {
   latex <- kbl(
     df,
@@ -731,14 +741,14 @@ to_latex_file <- function(df, caption, label, file, digits = 3, col_names = NULL
     caption     = caption,
     label       = label,
     align       = "l",
-    escape      = TRUE # escapa _ y caracteres especiales en nombres
+    escape      = TRUE
   ) |>
     kable_styling(latex_options = c("repeat_header", "hold_position"))
   cat(latex, file = file)
   invisible(file)
 }
 
-# ==== Utilidad: convertir variable de pobreza a 0/1 ====
+# ==== (B) Helper: convertir variable de pobreza a 0/1 ====
 # poor_level: nombre del nivel que indica "pobre" si la variable no es 0/1.
 .to_poverty01 <- function(x, poor_level = NULL) {
   if (is.logical(x)) return(as.integer(x))
@@ -747,18 +757,17 @@ to_latex_file <- function(df, caption, label, file, digits = 3, col_names = NULL
   if (!is.null(poor_level)) return(as.integer(x == poor_level))
   levs <- levels(x)
   if (length(levs) != 2) stop("La variable de pobreza debe tener 2 niveles o especifica 'poor_level'.")
-  # Por convención, segundo nivel = pobre si no se especifica
-  as.integer(x == levs[2])
+  as.integer(x == levs[2])  # convención: segundo nivel = pobre
 }
 
 overall <- overall_summary_table(train_def, exclude = c("id"))
 diff_mix <- diff_effects_by_poverty(
   train_def,
-  poverty_var = "Pobre",       # nombre de tu variable de pobreza
-  poor_level  = "Pobre",       # el nivel que indica pobreza (si no es 0/1)
-  # success_map = list(TuVariableFactor="Sí"),  # opcional: define "éxito"
-  success_ref = "second"       # usa el 2º nivel como éxito por defecto
+  poverty_var = "Pobre",
+  poor_level  = "Pobre",
+  success_ref = "second"
 )
+
                                  
 overall_out <- overall |>
   rename(
