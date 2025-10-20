@@ -16,16 +16,13 @@ Propósito del repositorio
 Este repositorio contiene la solución al **Problem Set 2**, de la clase: Big Data Y Machine Learning para la Economía Aplicada 
 El propósito del trabajo es **desarrollar modelos predictivos a partir de un conjunto reducido de variables socioeconómicas, puede ser una herramienta útil, precisa y más costo-eficiente para el diseño de políticas públicas**.  
 
-**ESCRIBIR DE QUÉ FORMA PODEMOS E**
-
 ------------------------------------------------------
 
 Origen de los datos
 -------------------
 Los datos provienen de: **Pobreza Monetaria y Multidimensional en Colombia 2018** para Colombia. https://www.dane.gov.co/index.php/estadisticas-por-tema/pobreza-y-condiciones-de-vida/pobreza-y-desigualdad/pobreza-monetaria-y-multidimensional-en-colombia-2018
 
-El dataset original corresponde a la medición de pobreza monetaria y desigualdad del DANE y contiene información sobre empleo, ingresos y características sociodemográficas de los hogares.
-**HABLAR DE LA COMPETENCIA EN KAGGLE**
+El dataset original corresponde a la medición de pobreza monetaria y desigualdad del DANE y contiene información sobre empleo, ingresos y características sociodemográficas de los hogares. 
 ------------------------------------------------------
 
 Estructura del repositorio
@@ -50,7 +47,7 @@ Para ejecución primero correr `Proceso_taller.ipynb` y `R_básico.R`. Luego los
 
 Divisiones del código
 ---------------------
-El script `taller1.R` está dividido en secciones principales:
+El script `taller2.R` está dividido en secciones principales:
 
 1. **Web scraping**  
    Descarga y consolidación de la base GEIH 2018 (Bogotá) desde la página web.
