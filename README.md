@@ -3,19 +3,16 @@ Problem Set 2 —  Modelos de predicción de pobreza
 
 Autores - Grupo 6
 -------
-
 - Juan Esteban Moncada 202021566
 - Marcel Montesdoca 202012736
 - Mariana Correa 202020924
 - Rodrigo Iriarte 202022852
-
 ------------------------------------------------------
 
 Propósito del repositorio
 -------------------------
 Este repositorio contiene la solución al **Problem Set 2**, de la clase: Big Data Y Machine Learning para la Economía Aplicada 
 El propósito del trabajo es **desarrollar modelos predictivos a partir de un conjunto reducido de variables socioeconómicas, puede ser una herramienta útil, precisa y más costo-eficiente para el diseño de políticas públicas**.  
-
 ------------------------------------------------------
 
 Origen de los datos
@@ -47,41 +44,8 @@ Para ejecución primero correr `Proceso_taller.ipynb` y `R_básico.R`. Luego los
 
 Divisiones del código
 ---------------------
-El script `taller2.R` está dividido en secciones principales:
+En la carpeta de scripts están contenidos los diferentes modelos que se desarrollaron. `Random Forest.R` está dividido en secciones principales:
 
-1. **Web scraping**  
-   Descarga y consolidación de la base GEIH 2018 (Bogotá) desde la página web.
-
-2. **Limpieza de datos**  
-   - Conversión de variables a factores o numéricas.  
-   - Creación de variables cuadráticas y logaritmos.  
-   - Filtrado de individuos relevantes (mayores de 18 años, ocupados).  
-
-3. **Imputación y tratamiento de missing values**  
-   - Exploración de datos faltantes.  
-   - Filtrado de registros no válidos.  
-
-4. **Análisis descriptivo**  
-   - Tablas de estadísticos básicos.  
-   - Gráficas de importancia.  
-
-5. **Perfil edad–salario**  
-   - Estimación de un modelo cuadrático de log-ingresos sobre la edad.  
-   - Construcción de intervalos de confianza mediante bootstrap.  
-   - Identificación de la edad pico de ingresos.  
-
-6. **Brecha de género**  
-   - Estimación del gap incondicional (modelo simple).  
-   - Estimación del gap condicional con controles mediante FWL.  
-   - Bootstrap para comparar errores estándar.  
-   - Perfiles edad–salario por sexo (ceteris paribus).  
-
-7. **Modelos predictivos**  
-   - Separación train/test (70/30).  
-   - Ocho modelos de creciente complejidad (interacciones, polinomios, efectos no lineales).  
-   - Evaluación con RMSE (in-sample y out-of-sample).  
-   - Validación cruzada (LOOCV).  
-   - Análisis de errores, gráficas de residuales, cobertura de intervalos de predicción.  
 
 ------------------------------------------------------
 
