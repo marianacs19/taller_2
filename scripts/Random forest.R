@@ -115,7 +115,8 @@ submission_rf <- tibble(id = test$id, Pobre = pred_test_class)
 write.csv(submission_rf, paste0(wd_outputs, "/RandomForest2_cutoff03.csv"), row.names = FALSE)
 
 # ---- Importancia de Variables ----
-plot(varImp(rf_model), main = "Importancia de Variables — Random Forest")
+plot(varImp(rf_model, scale = FALSE), top = 20,
+     main = "20 Variables más importantes — Random Forest")
 
 # ---- Curva ROC ----
 roc_rf <- roc(response = rf_model$pred$obs,
