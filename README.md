@@ -44,7 +44,12 @@ Para ejecución primero correr `Proceso_taller.ipynb` y `R_básico.R`. Luego los
 
 Divisiones del código
 ---------------------
-En la carpeta de scripts están contenidos los diferentes modelos que se desarrollaron. `Random_forest.R` es el script del modelo elegido y con el mejor F1-score. `Regresion_lineal.R` es el script donde está contenido el modelo básico de rgresión lineal que se llevó a cabo como un primer insumo para comparar los demás modelos. En `arbolesRod.R` están contenidos dos modelos, uno de ellos es un CART básico y otro es usando la metodología bagging. `estimacion_modelos_logit.R` contiene 7 modelos logit (incluye Modelos 1–3, 4A–4C y Logit Penalizado). De aquí salen los modelos "Logit f1 optimizado" y "Logit Penalizado (Elastic Net)" que terminaron en el top 5 fuera de muestra por F1. 
+En la carpeta de scripts están contenidos los diferentes modelos que se desarrollaron. 
+`Random_forest.R` es el script del modelo elegido y con el mejor F1-score. 
+`Regresion_lineal.R` es el script donde está contenido el modelo básico de rgresión lineal que se llevó a cabo como un primer insumo para comparar los demás modelos. 
+`arbolesRod.R` están contenidos dos modelos, uno de ellos es un CART básico y otro es usando la metodología bagging. `estimacion_modelos_logit.R` contiene 7 modelos logit (incluye Modelos 1–3, 4A–4C y Logit Penalizado). De aquí salen los modelos "Logit f1 optimizado" y "Logit Penalizado (Elastic Net)" que terminaron en el top 5 fuera de muestra por F1. 
+`script_RF_Con_Pesos.R` contiene un Random Forest utilizando pesos para solucionar el imbanace de clases. 
+**** FALTA *****
 
 ------------------------------------------------------
 
@@ -55,21 +60,20 @@ Requisitos y configuración
 **Paquetes R**
 El script usa `pacman::p_load()` para instalar/cargar automáticamente:
 - `tidyverse`, `rvest`, `writexl`, `readxl`
-- `gt`, `gtsummary`, `modelsummary`
-- `caret`, `boot`, `stargazer`
-- `skimr`, `car`, `forcats`, `scales`
+- `gt`, `gtsummary`, `modelsummary`, `ranger`
+- `caret`, `boot`, `stargazer`, `rpart`, `rpart.plot`
+- `skimr`, `car`, `forcats`, `scales`, `glmnet`, `pROC`
 
-Instalación rápida (si no se tiene `pacman`):
+Instalación rápida si se necesita:
 
 install.packages(c(
   "pacman","tidyverse","rvest","writexl","readxl",
-  "gt","gtsummary","modelsummary",
-  "caret","boot","stargazer","skimr","car","forcats","scales"
+  "gt","gtsummary","modelsummary", "glmnet", "rpart", "rpart.plot"
+  "caret","boot","stargazer","skimr","car","forcats","scales", "pROC", "ranger"
 ))
 
 **Reproducibilidad**
-- set.seed(07092025) para procesos generales.
-- set.seed(10101) para partición train/test. 
+En cada script hay diferentes semillas que se deben dejar igual para que los modelos sean reproducibles
 
 ------------------------------------------------------
 
@@ -79,32 +83,16 @@ Instrucciones de uso
    git clone <url-del-repo>
 
 2. Abrir el proyecto en RStudio:
-   Abrir el archivo `taller_1.Rproj`. Esto asegura que las rutas relativas a `/scripts`, `/stores` y `/views` funcionen correctamente.
+   Abrir el archivo `taller_2.Rproj`. Esto asegura que las rutas relativas a `/scripts`, `/stores` y `/views` funcionen correctamente.
 
-3. Ejecutar el script principal:
-   source("scripts/taller1.R")
+3. Ejecutar el script `Proceso_taller.ipynb` y `R_básico.R` para la parte de los datos y guardar las bases de tados
+   
+5. Ejecutar los demás scripts descritos anteriormente donde están contenidos todos los modelos utilzados. 
 
-   Nota: la ejecución completa puede tardar un largo tiempo (especialmente scraping y bootstraps).
+   Nota: el tiempo de ejecución depende del modelo 
 
-4. Outputs generados:
-   - stores/base_geih.xlsx — base consolidada tras el scraping y limpieza.
-   - Gráficas en /views (ej. salario_por_sexo_edad.png).
-   - Tablas exportadas en LaTeX (.tex) en /views.
-
-------------------------------------------------------
-
-Resultados esperados / ejemplos
--------------------------------
-Ejemplo de outputs clave:
-
-- Gráfica Edad–Salario por Sexo (ceteris paribus)
-  Archivo generado: views/salario_por_sexo_edad.png
-
-- Tablas en LaTeX exportadas con stargazer y modelsummary,
-  listas para incluir en reportes académicos.
-
-------------------------------------------------------
-
-
-
-
+6. Outputs generados:
+   - stores/train_def.RData — base de entrenamiento
+   - stores/test_def.RData — base de test
+   - Gráficas en /views
+   - Los resultados de los modelos para subir a Kaggle en /estimations.
