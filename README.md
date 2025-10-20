@@ -16,34 +16,35 @@ Propósito del repositorio
 Este repositorio contiene la solución al **Problem Set 2**, de la clase: Big Data Y Machine Learning para la Economía Aplicada 
 El propósito del trabajo es **desarrollar modelos predictivos a partir de un conjunto reducido de variables socioeconómicas, puede ser una herramienta útil, precisa y más costo-eficiente para el diseño de políticas públicas**.  
 
-El análisis se divide en dos grandes objetivos:
-1. **Inferencia**: estimar relaciones entre edad, género, educación y otras características con los ingresos laborales horarios.
-2. **Predicción**: evaluar el desempeño de distintos modelos al predecir ingresos, usando métricas como el RMSE, validación con particiones de datos y validación cruzada (LOOCV).
+**ESCRIBIR DE QUÉ FORMA PODEMOS E**
 
 ------------------------------------------------------
 
 Origen de los datos
 -------------------
-Los datos provienen de la **Gran Encuesta Integrada de Hogares (GEIH) 2018** para Bogotá.  
-Esta base se obtiene mediante web scraping del portal:  
-https://ignaciomsarmiento.github.io/GEIH2018_sample/  
+Los datos provienen de: **Pobreza Monetaria y Multidimensional en Colombia 2018** para Colombia. https://www.dane.gov.co/index.php/estadisticas-por-tema/pobreza-y-condiciones-de-vida/pobreza-y-desigualdad/pobreza-monetaria-y-multidimensional-en-colombia-2018
 
 El dataset original corresponde a la medición de pobreza monetaria y desigualdad del DANE y contiene información sobre empleo, ingresos y características sociodemográficas de los hogares.
-
+**HABLAR DE LA COMPETENCIA EN KAGGLE**
 ------------------------------------------------------
 
 Estructura del repositorio
 --------------------------
+- `Proceso_taller.ipynb` - Jupyter Notebook en Python que utiliza las bases de datos descargadas de la competencia y las limpia para posteriormente utilizarla en el análisis. Para reproducibilidad, descargar la carpeta de la competencia e incluirla con el siguiente nombre: `uniandes-bdml-2025-20-ps-2`.
 - `/scripts/`
-  - `taller1.R` — Script principal con todo el flujo de trabajo.
+  - `R_básico.R` — Script que ejecuta las estadísticas descriptivas y las gráficas descriptivas.
+  - `Script_RF_Con_Pesos.R` - Scrip que ejecuta y estima modelos que fueron subidos a la competencia. El único modelo que superó el F-score 0.65, fue un random forest.
 - `/stores/`
   - Base de datos ( `base_geih.xlsx`).
-- `/views/`
-  - Gráficas y tablas exportadas (ej. `salario_por_sexo_edad.png`, `salario_educacion.png`, etc.).
+- `/Tables-graphs/`
+  - Gráficas y tablas exportadas.
 - `taller_1.Rproj`
   - Proyecto de R para ejecutar con rutas relativas.`
   - Archivos de configuración y entorno.
 - `README` (este archivo).
+------------------------------------------------------
+
+Para ejecución primero correr `Proceso_taller.ipynb` y `R_básico.R`. Luego los demás scripts de la carpeta `/scripts/`. 
 
 ------------------------------------------------------
 
