@@ -48,8 +48,9 @@ En la carpeta de scripts están contenidos los diferentes modelos que se desarro
 `Random_forest.R` es el script del modelo elegido y con el mejor F1-score. 
 `Regresion_lineal.R` es el script donde está contenido el modelo básico de rgresión lineal que se llevó a cabo como un primer insumo para comparar los demás modelos. 
 `arbolesRod.R` están contenidos dos modelos, uno de ellos es un CART básico y otro es usando la metodología bagging. `estimacion_modelos_logit.R` contiene 7 modelos logit (incluye Modelos 1–3, 4A–4C y Logit Penalizado). De aquí salen los modelos "Logit f1 optimizado" y "Logit Penalizado (Elastic Net)" que terminaron en el top 5 fuera de muestra por F1. 
-`script_RF_Con_Pesos.R` contiene un Random Forest utilizando pesos para solucionar el imbanace de clases. 
-**** FALTA *****
+`script_RF_Con_Pesos.R` contiene un Random Forest utilizando pesos para solucionar el desbalance de clases. 
+`elastic_net.R` contiene un modelo de Elastic Net con dos versiones: una logit y la otra normal. Se utiliza un cross validation con variaciones en los parámetros alpha y lambda para conseguir el mejor resultado.
+`xgboost.R` contiene un modelo de XGBoost que usa una grilla para estimar la mejor combinación de parámetros mediante una grilla.
 
 ------------------------------------------------------
 
