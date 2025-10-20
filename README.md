@@ -38,13 +38,15 @@ Estructura del repositorio
 - `README` (este archivo).
 ------------------------------------------------------
 
-Para ejecución primero correr `Proceso_taller.ipynb` y `R_básico.R`. Luego los demás scripts de la carpeta `/scripts/`. 
+Para ejecución primero correr `Proceso_taller.ipynb`. Luego los ejecutar el script `masterscript.R`. 
+Este archivo correrá los scripts asociados a las estimación de los diferentes modelos.
 
 ------------------------------------------------------
 
-Divisiones del código
+A continuación se presentan las divisiones del código, en caso de que se quiera estimar algunos modelos en específico (la descripción también se encuentra en
+el masterscript).
 ---------------------
-En la carpeta de scripts están contenidos los diferentes modelos que se desarrollaron. 
+
 `Random_forest.R` es el script del modelo elegido y con el mejor F1-score. 
 `Regresion_lineal.R` es el script donde está contenido el modelo básico de rgresión lineal que se llevó a cabo como un primer insumo para comparar los demás modelos. 
 `arbolesRod.R` están contenidos dos modelos, uno de ellos es un CART básico y otro es usando la metodología bagging. `estimacion_modelos_logit.R` contiene 7 modelos logit (incluye Modelos 1–3, 4A–4C y Logit Penalizado). De aquí salen los modelos "Logit f1 optimizado" y "Logit Penalizado (Elastic Net)" que terminaron en el top 5 fuera de muestra por F1. 
@@ -86,11 +88,9 @@ Instrucciones de uso
 2. Abrir el proyecto en RStudio:
    Abrir el archivo `taller_2.Rproj`. Esto asegura que las rutas relativas a `/scripts`, `/stores` y `/views` funcionen correctamente.
 
-3. Ejecutar el script `Proceso_taller.ipynb` y `R_básico.R` para la parte de los datos y guardar las bases de tados
+3. Ejecutar el script `Proceso_taller.ipynb` y `masterscript.R` para la parte de los datos y guardar las bases de tados
    
-5. Ejecutar los demás scripts descritos anteriormente donde están contenidos todos los modelos utilzados. 
-
-   Nota: el tiempo de ejecución depende del modelo 
+   Nota: el tiempo de ejecución será largo ya que correrá todos los modelos. 
 
 6. Outputs generados:
    - stores/train_def.RData — base de entrenamiento
