@@ -281,55 +281,6 @@ test_def <- apply_labels_from_dict(test, dict_df)
 save(test_def, file="Data/test_def.RData")
 save(train_def, file="Data/train_def.RData")
 
-# Modelo 1
-# 
-ctrl <- trainControl(
-  method = "cv",
-  number = 5,
-  classProbs = TRUE,
-  savePredictions = TRUE
-)
-
-set.seed(2025)
-
-model1 <- train(
-  Pobre~Años_educ_jefe+Años_educ_mean_hogar+Edad_jefe+Horas_trabajadas_hogar+Li+Lp+Pctg_Personas_edad_productiva_hogar+Personas_hogar+Ciudad_cat+Urbano+Espacios_hogar+Subsidio_transporte_jefe+Dormitorios_hogar+Propiedad_vivienda+Personas_hogar+Oficio_C8_jefe,
-  data=train_def,
-  method = "glm",
-  trControl = ctrl, 
-  family = "binomial"
-)
-
-# Since we're predicting with an object created by `caret`, some arguments changed.
-# In particular, to predict class probabilities we use `type = 'prob'`, and to
-# predict class labels we use `type = 'raw'`. 
-predict_logit <- data.frame(
-  Pobre = train_def$Pobre,                                           ## observed class labels
-  P_hat = predict(model1, newdata = train_def, type = "prob"),    ## predicted class probabilities
-  pred = predict(model1, newdata = train_def, type = "raw")      ## predicted class labels
-)
-
-head(predict_logit)
-
-cm <- confusionMatrix(data = predict_logit$pred, reference = predict_logit$Pobre, positive = "Pobre")
-cm
-
-###Formateo a KAGGLE
-
-predictSample <- test_def |>
-  mutate(pobre_lab = predict(model1, newdata = test_def, type = "raw")) |>
-  select(id,pobre_lab)
-
-head(predictSample)
-
-predictSample <- predictSample |> 
-  mutate(pobre=ifelse(pobre_lab=="Pobre",1,0)) |>
-  select(id, pobre)
-head(predictSample)            
-
-# nombre
-write.csv(predictSample,"Estimations/modelo1_pruebav1_15_10_2025.csv", row.names = FALSE)
-
 # Estadísticas descriptivas
 
 # ==== (1) Resumen compacto de TODAS las variables ====
@@ -359,24 +310,37 @@ overall_summary_table <- function(df, exclude = NULL, digits = 3) {
     )
   }
   
-  # --- Categóricas ---
+  # --- Categóricas (arreglo: calcular p y modo por variable) ---
   cat_vars <- dplyr::select(df, where(is_cat))
   if (ncol(cat_vars) > 0) {
-    cat_tbl <- cat_vars |>
+    # 1) Conteos por nivel (excluye NA)
+    cat_counts <- cat_vars |>
       dplyr::mutate(dplyr::across(everything(), as.character)) |>
       tidyr::pivot_longer(everything(), names_to = "variable", values_to = "value") |>
       dplyr::filter(!is.na(value)) |>
-      dplyr::count(variable, value, name = "n_value") |>
+      dplyr::count(variable, value, name = "n_value")
+    
+    # 2) Totales por variable
+    tot <- cat_counts |>
+      dplyr::summarise(
+        n         = sum(n_value),
+        n_niveles = dplyr::n_distinct(value),
+        .by = "variable"
+      )
+    
+    # 3) Modo y su porcentaje (agrupado por variable)
+    modes <- cat_counts |>
       dplyr::group_by(variable) |>
       dplyr::mutate(p = n_value / sum(n_value)) |>
-      dplyr::slice_max(order_by = n_value, n = 1, with_ties = FALSE) |>
-      dplyr::summarise(
-        n               = sum(n_value),
-        n_niveles       = dplyr::n_distinct(value),
-        modo            = dplyr::first(value),
-        modo_porcentaje = dplyr::first(p),
-        .groups = "drop"
-      ) |>
+      dplyr::slice_max(n_value, n = 1, with_ties = FALSE) |>
+      dplyr::ungroup() |>
+      dplyr::transmute(
+        variable,
+        modo            = value,
+        modo_porcentaje = p
+      )
+    
+    cat_tbl <- dplyr::left_join(tot, modes, by = "variable") |>
       dplyr::mutate(tipo = "categórica")
   } else {
     cat_tbl <- tibble::tibble(
@@ -385,7 +349,7 @@ overall_summary_table <- function(df, exclude = NULL, digits = 3) {
     )
   }
   
-  # --- Unir y ordenar columnas ---
+  # --- Unir y redondear ---
   out <- dplyr::bind_rows(num_tbl, cat_tbl) |>
     dplyr::mutate(dplyr::across(where(is.numeric), ~round(.x, digits))) |>
     dplyr::relocate(variable, tipo)
@@ -393,26 +357,24 @@ overall_summary_table <- function(df, exclude = NULL, digits = 3) {
   out
 }
 
-# ==== (2) Diferencias de medias por pobreza (Welch t-test) ====
-# ==== NUEVO: diferencias (medias para numéricas, proporciones para factor binario) ====
+# ==== (2) Diferencias de medias por pobreza (Welch t-test)
+#      y proporciones para factores binarios ====
 diff_effects_by_poverty <- function(df,
                                     poverty_var,
                                     poor_level = NULL,
                                     digits = 3,
-                                    # Opcional: define el nivel "éxito" para algún factor binario
-                                    success_map = NULL,    # lista o named character: list(var="Sí") / c(var="Sí")
+                                    success_map = NULL,    # list(var="Sí") o c(var="Sí")
                                     success_ref = c("second","first")) {
-  
   stopifnot(poverty_var %in% names(df))
   success_ref <- match.arg(success_ref)
   pov <- .to_poverty01(df[[poverty_var]], poor_level = poor_level)
-  df2 <- df |> mutate(`__poverty__` = pov)
+  df2 <- df |> dplyr::mutate(`__poverty__` = pov)
   
   # --- NUMÉRICAS -> Welch t-test ---
   num_vars <- names(df2)[sapply(df2, is.numeric)]
   num_vars <- setdiff(num_vars, "__poverty__")
   
-  res_num <- map_dfr(num_vars, function(v) {
+  res_num <- purrr::map_dfr(num_vars, function(v) {
     x  <- df2[[v]]
     g1 <- x[df2$`__poverty__` == 1]
     g0 <- x[df2$`__poverty__` == 0]
@@ -424,17 +386,17 @@ diff_effects_by_poverty <- function(df,
                                  ifelse(pval < .05,  "*",
                                         ifelse(pval < .1,   "•", "")))))
     
-    tibble(
-      variable    = v,
-      tipo        = "numérica",
-      medida      = "media",
-      n_pobre     = sum(!is.na(g1)),
-      est_pobre   = mean(g1, na.rm = TRUE),
-      n_no_pobre  = sum(!is.na(g0)),
-      est_no_pobre= mean(g0, na.rm = TRUE),
-      diferencia  = mean(g1, na.rm = TRUE) - mean(g0, na.rm = TRUE),
-      p_value     = pval,
-      Sig.        = sig
+    tibble::tibble(
+      variable     = v,
+      tipo         = "numérica",
+      medida       = "media",
+      n_pobre      = sum(!is.na(g1)),
+      est_pobre    = mean(g1, na.rm = TRUE),
+      n_no_pobre   = sum(!is.na(g0)),
+      est_no_pobre = mean(g0, na.rm = TRUE),
+      diferencia   = mean(g1, na.rm = TRUE) - mean(g0, na.rm = TRUE),
+      p_value      = pval,
+      Sig.         = sig
     )
   })
   
@@ -443,17 +405,16 @@ diff_effects_by_poverty <- function(df,
   fac_vars <- names(df2)[sapply(df2, is_bin_factor)]
   fac_vars <- setdiff(fac_vars, c(poverty_var))  # excluye la propia pobreza
   
-  res_fac <- map_dfr(fac_vars, function(v) {
+  res_fac <- purrr::map_dfr(fac_vars, function(v) {
     f <- df2[[v]]
     levs <- levels(f)
-    # Determinar "éxito" (nivel 1)
     target <- if (!is.null(success_map) && !is.null(unname(success_map[[v]]))) {
       as.character(success_map[[v]])
     } else if (success_ref == "second") {
       levs[2]
     } else levs[1]
     
-    z <- as.integer(f == target)
+    z  <- as.integer(f == target)
     z1 <- z[df2$`__poverty__` == 1]
     z0 <- z[df2$`__poverty__` == 0]
     a  <- sum(z1 == 1, na.rm = TRUE); n1 <- sum(!is.na(z1))
@@ -467,7 +428,7 @@ diff_effects_by_poverty <- function(df,
                                  ifelse(pval < .05,  "*",
                                         ifelse(pval < .1,   "•", "")))))
     
-    tibble(
+    tibble::tibble(
       variable     = v,
       tipo         = "factor_bin",
       medida       = paste0('proporción de "', target, '"'),
@@ -481,13 +442,13 @@ diff_effects_by_poverty <- function(df,
     )
   })
   
-  out <- bind_rows(res_num, res_fac) |>
-    mutate(across(where(is.numeric), ~round(.x, digits))) |>
-    arrange(desc(abs(diferencia)))
+  out <- dplyr::bind_rows(res_num, res_fac) |>
+    dplyr::mutate(dplyr::across(where(is.numeric), ~round(.x, digits))) |>
+    dplyr::arrange(dplyr::desc(abs(diferencia)))
   out
 }
 
-# ==== (A) Funciones helper para exportar a LaTeX con kableExtra ====
+# ==== (A) Helper: exportar a LaTeX con kableExtra ====
 to_latex_file <- function(df, caption, label, file, digits = 3, col_names = NULL) {
   latex <- kbl(
     df,
@@ -498,14 +459,14 @@ to_latex_file <- function(df, caption, label, file, digits = 3, col_names = NULL
     caption     = caption,
     label       = label,
     align       = "l",
-    escape      = TRUE # escapa _ y caracteres especiales en nombres
+    escape      = TRUE
   ) |>
     kable_styling(latex_options = c("repeat_header", "hold_position"))
   cat(latex, file = file)
   invisible(file)
 }
 
-# ==== Utilidad: convertir variable de pobreza a 0/1 ====
+# ==== (B) Helper: convertir variable de pobreza a 0/1 ====
 # poor_level: nombre del nivel que indica "pobre" si la variable no es 0/1.
 .to_poverty01 <- function(x, poor_level = NULL) {
   if (is.logical(x)) return(as.integer(x))
@@ -514,18 +475,17 @@ to_latex_file <- function(df, caption, label, file, digits = 3, col_names = NULL
   if (!is.null(poor_level)) return(as.integer(x == poor_level))
   levs <- levels(x)
   if (length(levs) != 2) stop("La variable de pobreza debe tener 2 niveles o especifica 'poor_level'.")
-  # Por convención, segundo nivel = pobre si no se especifica
-  as.integer(x == levs[2])
+  as.integer(x == levs[2])  # convención: segundo nivel = pobre
 }
 
 overall <- overall_summary_table(train_def, exclude = c("id"))
 diff_mix <- diff_effects_by_poverty(
   train_def,
-  poverty_var = "Pobre",       # nombre de tu variable de pobreza
-  poor_level  = "Pobre",       # el nivel que indica pobreza (si no es 0/1)
-  # success_map = list(TuVariableFactor="Sí"),  # opcional: define "éxito"
-  success_ref = "second"       # usa el 2º nivel como éxito por defecto
+  poverty_var = "Pobre",
+  poor_level  = "Pobre",
+  success_ref = "second"
 )
+
                                  
 overall_out <- overall |>
   rename(
@@ -553,6 +513,105 @@ to_latex_file(
   label   = "tab:diff_mix_pobreza",
   file    = "tabla_diff_mix_pobreza.tex"
 )
+
+
+#Gráficas
+
+
+p_load(ggplot2,dplyr,tidyr,patchwork)
+
+graficar_categoricas <- function(datos, 
+                                 variables, 
+                                 variable_grupo, 
+                                 titulo_principal = "Comparación de Variables Categóricas",
+                                 colores = c("#037AE7", "#020050")) {
+  
+  # Verificar que las variables existan en los datos
+  vars_faltantes <- setdiff(c(variables, variable_grupo), names(datos))
+  if (length(vars_faltantes) > 0) {
+    stop("Las siguientes variables no existen en los datos: ", 
+         paste(vars_faltantes, collapse = ", "))
+  }
+  
+  # Lista para almacenar las gráficas
+  lista_graficas <- list()
+  
+  # Crear una gráfica para cada variable
+  for (var in variables) {
+    # Calcular proporciones por grupo
+    datos_graf <- datos %>%
+      filter(!is.na(.data[[var]]) & !is.na(.data[[variable_grupo]])) %>%
+      group_by(.data[[variable_grupo]], .data[[var]]) %>%
+      summarise(n = n(), .groups = "drop") %>%
+      group_by(.data[[variable_grupo]]) %>%
+      mutate(prop = n / sum(n) * 100)
+    
+    # Crear la gráfica
+    p <- ggplot(datos_graf, aes(x = .data[[var]], y = prop, fill = .data[[variable_grupo]])) +
+      geom_bar(stat = "identity", position = "dodge", width = 0.7) +
+      scale_fill_manual(values = colores) +
+      labs(title = var,
+           x = NULL,
+           y = "Porcentaje (%)",
+           fill = variable_grupo) +
+      theme_minimal() +
+      theme(
+        plot.title = element_text(face = "bold", size = 11, hjust = 0.5),
+        axis.text.x = element_text(angle = 45, hjust = 1, size = 8),
+        axis.text.y = element_text(size = 8),
+        legend.position = "bottom",
+        legend.title = element_text(size = 9),
+        legend.text = element_text(size = 8),
+        panel.grid.minor = element_blank()
+      ) +
+      scale_y_continuous(limits = c(0, NA), expand = expansion(mult = c(0, 0.1)))
+    
+    lista_graficas[[var]] <- p
+  }
+  
+  # Combinar todas las gráficas
+  n_vars <- length(variables)
+  n_cols <- min(2, n_vars)  # Máximo 3 columnas
+  
+  grafica_combinada <- wrap_plots(lista_graficas, ncol = n_cols) +
+    plot_annotation(
+      # title = titulo_principal,
+      theme = theme(plot.title = element_text(face = "bold", size = 14, hjust = 0.5))
+    )
+  
+  return(grafica_combinada)
+}
+
+variables_a_graficar <- c( "Ciudad_cat",  
+                           "Años_educ_mean_hogar", 
+                           "Afiliados_salud_hogar"
+)
+
+# Crear la gráfica comparando por sexo
+grafica1 <- graficar_categoricas(
+  datos = train_def,
+  variables = variables_a_graficar,
+  variable_grupo = "Pobre"
+)
+
+print(grafica1)
+
+ggsave("Estimations/Descriptivas1.pdf", plot = grafica1, width = 15, height = 8)
+
+variables_a_graficar <- c( "Mujer_jefe",
+                           "Regimen_salud_jefe", "Oficio_C8_jefe", "Ocupado_jefe"
+)
+
+# Crear la gráfica comparando por sexo
+grafica1 <- graficar_categoricas(
+  datos = train_def,
+  variables = variables_a_graficar,
+  variable_grupo = "Pobre"
+)
+
+print(grafica1)
+
+ggsave("Estimations/Descriptivas2.pdf", plot = grafica1, width = 15, height = 8)
 
 # =========================================================
 # Fin -----------------------------------------------------
